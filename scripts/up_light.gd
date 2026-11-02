@@ -44,7 +44,7 @@ func _process(delta: float) -> void:
 	_rise = lerpf(_rise, strength, minf(1.0, delta * 18.0))   # ほぼ遅れなく追従
 	_particles.position = base
 	_particles.emission_rect_extents = Vector2(width * 0.45, 4)
-	_particles.emitting = _rise > 0.4 and front
+	_particles.emitting = false   # 光の粒は出さない
 	queue_redraw()
 
 
