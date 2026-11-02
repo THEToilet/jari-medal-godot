@@ -1322,6 +1322,10 @@ func _weighted(table: Dictionary) -> String:
 
 
 func _explode() -> void:
+	# 爆発で発破線がビル側からちぎれて吹き飛ぶ（残さない）
+	var ct := create_tween()
+	ct.tween_property(cable, "cut", 1.0, 0.45).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	ct.tween_callback(func() -> void: cable.visible = false)
 	bomb_marks.count = 0
 	for d in base_sticks:
 		d.queue_free()
