@@ -58,7 +58,10 @@ func has_file(kind: String) -> bool:
 ## BGM 開始／停止
 func play_bgm() -> void:
 	if _files.has("bgm") and not _bgm.playing:
-		_bgm.stream = _files["bgm"]
+		var st: AudioStream = _files["bgm"]
+		if st is AudioStreamOggVorbis:
+			(st as AudioStreamOggVorbis).loop = true   # 継ぎ目なくループ
+		_bgm.stream = st
 		_bgm.play()
 
 
