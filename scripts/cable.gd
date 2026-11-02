@@ -25,11 +25,17 @@ var _last_cut: float = -1.0
 var _dirty: bool = true
 
 
-func set_ends(a: Vector2, b: Vector2) -> void:
+## curl > 0 のときは弧を描いて、最後は右から水平に b へ差し込む
+func set_ends(a: Vector2, b: Vector2, curl: float = 0.0) -> void:
 	var curve := Curve2D.new()
-	var mid := Vector2((a.x + b.x) / 2.0, maxf(a.y, b.y) + 60.0)
-	curve.add_point(a, Vector2.ZERO, (mid - a) * 0.6)
-	curve.add_point(b, (mid - b) * 0.6, Vector2.ZERO)
+	if curl > 0.0:
+		# 起爆器から左へゆるく弧を描いて、最後は右から水平に差し込む
+		curve.add_point(a, Vector2.ZERO, Vector2(-(a.x - b.x) * 0.35, 30.0) * curl)
+		curve.add_point(b, Vector2((a.x - b.x) * 0.55, 0.0) * curl, Vector2.ZERO)
+	else:
+		var mid := Vector2((a.x + b.x) / 2.0, maxf(a.y, b.y) + 60.0)
+		curve.add_point(a, Vector2.ZERO, (mid - a) * 0.6)
+		curve.add_point(b, (mid - b) * 0.6, Vector2.ZERO)
 	curve.bake_interval = 10.0
 	points = curve.get_baked_points()
 	cut = 0.0

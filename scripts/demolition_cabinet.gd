@@ -98,6 +98,7 @@ var cable: Cable
 var tray: MedalTray
 var plunger: Sprite2D
 var cable_gen: Cable
+var links: LinkWires
 var meter: ChargeMeter
 var _pump: Tween
 var _push_i: int = 0
@@ -123,7 +124,8 @@ var _wait_t: float = 0.0
 var _medals_txt: String = ""
 ## メダルを入れたのに選ばないまましばらく経ったら、選び方の案内を出す
 const SELECT_HINT_AFTER := 6.0
-const SELECT_HINT_Y := 150.0
+const SELECT_HINT_Y := 8.0          # 案内は▼の上。出ている間は▼を下へずらす
+var _arrow_push: float = 0.0
 var _bet_idle: float = 0.0
 var select_hint: Control
 var _preloaded: Array[Resource] = []
@@ -273,6 +275,10 @@ func _build_world() -> void:
 	cable_gen.visible = false
 	add_child(cable_gen)
 	add_child(cable)
+	links = LinkWires.new()
+	links.z_index = 5
+	links.visible = false
+	add_child(links)
 
 	bomb_marks = BombMarks.new()
 	bomb_marks.tex = _tex["dynamite"]
@@ -579,6 +585,7 @@ func _reset() -> void:
 	dynamo.power = 0.0
 	cable.power = 0.0
 	cable.visible = false
+	links.visible = false
 	cable_gen.power = 0.0
 	_layout_gen_cable()
 	plunger.modulate = Color.WHITE
@@ -624,7 +631,7 @@ func _build_select_hint() -> void:
 		select_hint = r
 	else:
 		var l := Label.new()
-		l.text = "ボタンで ビルを えらんでね！"
+		l.text = "ボタンで たてものを えらんでね！"
 		l.add_theme_font_size_override("font_size", 64)
 		l.add_theme_color_override("font_color", Color(1, 0.92, 0.2))
 		l.add_theme_color_override("font_outline_color", Color(0.08, 0.05, 0.05))
@@ -827,7 +834,9 @@ func _update_tags(delta: float) -> void:
 			ul.strength = near
 		# ▼はビルの頭の上でぴょこぴょこ
 		# ▼は画面上部の中央に固定（ビルの高さに関係なく同じ位置）
-		arrow.position = Vector2(CENTER_X - 80, ARROW_Y + sin(Time.get_ticks_msec() * 0.01) * 10)
+		var want_push: float = 95.0 if (select_hint and select_hint.visible) else 0.0
+		_arrow_push = lerpf(_arrow_push, want_push, 0.2)
+		arrow.position = Vector2(CENTER_X - 80, ARROW_Y + _arrow_push + sin(Time.get_ticks_msec() * 0.01) * 10)
 	for b in buildings:
 		# 中央に近づくほど大きく（ガウス型：端ではほぼ変わらず、中央付近でグッと大きくなる）
 		var d: float = (b.position.x - CENTER_X) / (SLOT_W * CENTER_ZOOM_WIDTH)
@@ -946,6 +955,31 @@ func _update_bet_label() -> void:
 					mv.tween_property(o.get_meta(key), "position:x", pos[i].x, 0.25)
 		_crane_drop(d, pos[rack.size() - 1], n, k * 0.08)
 		k += 1
+
+
+## 起爆器からの発破線を、足元に並べたダイナマイトのいちばん右（いちばん大きい）につなぐ。
+## ダイナマイト同士も短い線でつなぐ
+func _wire_pile(dest: Array[Vector2]) -> void:
+	var start := Vector2(PLUNGER_X - 50, PLUNGER_Y - 50)
+	if dest.is_empty():
+		cable.set_ends(start, Vector2(CENTER_X, GROUND_Y - 10), 0.0)
+		links.set_anchors(PackedVector2Array())
+		return
+	var anchors := PackedVector2Array()
+	for i in dest.size():
+		var t: Texture2D = _stage_tex(i + 1)
+		var h: float = STAGE_H[i] * BASE_RATIO
+		var w: float = h * t.get_width() / t.get_height()
+		# 入れ物の右上あたりの金具
+		anchors.append(dest[i] + Vector2(w * 0.32, -h * 0.05))
+	var last: Vector2 = anchors[anchors.size() - 1]
+	var lt: Texture2D = _stage_tex(dest.size())
+	var lh: float = STAGE_H[dest.size() - 1] * BASE_RATIO
+	var end := Vector2(dest[dest.size() - 1].x + lh * lt.get_width() / lt.get_height() * 0.5 + 4.0, dest[dest.size() - 1].y + lh * 0.15)
+	anchors[anchors.size() - 1] = end
+	cable.set_ends(start, end, 1.0)
+	links.set_anchors(anchors)
+	links.visible = true
 
 
 ## 並べた入れ物の中心位置。n 個を足元 base を中心に左から小さい順に並べる
@@ -1393,7 +1427,6 @@ func _zoom() -> void:
 	for b in buildings:
 		if b != chosen:
 			b.visible = false
-	cable.set_ends(Vector2(PLUNGER_X - 50, PLUNGER_Y - 50), Vector2(960 + chosen.size().x * s * 0.42, GROUND_Y - 10))
 	# スイッチ（起爆器）が下からせり上がる
 	_layout_gen_cable()
 	cable_gen.visible = true
@@ -1401,6 +1434,7 @@ func _zoom() -> void:
 	cable.visible = true
 	# 並べた入れ物が、小さい順に1個ずつ山なりにピョンと跳んでビルの足元へ
 	var dest: Array[Vector2] = _pile_layout(rack.size(), BASE_RATIO, Vector2(CENTER_X, GROUND_Y + 4))
+	_wire_pile(dest)
 	var flyers: Array[Sprite2D] = []
 	var last: Tween = null
 	for i in rack.size():
@@ -1491,6 +1525,8 @@ func _process(delta: float) -> void:
 		if _medals_txt == "":
 			_medals_txt = lbl_medals.text
 		lbl_medals.text = "%s   FPS %d" % [_medals_txt, Engine.get_frames_per_second()]
+	if links.visible:
+		links.power = cable.power
 	if title_logo:
 		if state == S.WAIT:
 			_wait_t += delta
@@ -1723,6 +1759,7 @@ func _explode() -> void:
 	var ct := create_tween()
 	ct.tween_property(cable, "cut", 1.0, 0.45).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
 	ct.tween_callback(func() -> void: cable.visible = false)
+	links.visible = false
 	bomb_marks.count = 0
 	for d in base_sticks:
 		d.queue_free()
