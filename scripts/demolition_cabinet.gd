@@ -616,6 +616,11 @@ func _enter(s: S) -> void:
 			stop_idle()
 
 
+## ビルを選んだあと〜結果まで（メダル投入を受け付けない間）。仮想筐体のカメラ切り替えに使う
+func is_in_play() -> bool:
+	return state >= S.ZOOM
+
+
 func _reset() -> void:
 	if demo:
 		# デモが終わったらタイトルに戻す
@@ -700,6 +705,8 @@ func _build_select_hint() -> void:
 
 ## スマホ・ブラウザ用：画面にメダル投入ボタンを出す（筐体では出さない）
 func _build_touch_ui() -> void:
+	if get_viewport() != get_tree().root:
+		return   # 仮想筐体（3D）の画面の中では出さない。筐体の投入口を使う
 	if not (OS.has_feature("web") or DisplayServer.is_touchscreen_available() or OS.has_feature("mobile")):
 		return
 	var b := Button.new()
