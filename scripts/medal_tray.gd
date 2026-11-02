@@ -31,7 +31,7 @@ func payout(n: int, origin: Vector2) -> void:
 func _spawn(origin: Vector2) -> void:
 	var spr := Sprite2D.new()
 	spr.texture = coin_tex
-	var s: float = randf_range(0.7, 1.0)
+	var s: float = randf_range(1.3, 1.8)   # 大きめ
 	spr.scale = Vector2(s, s)
 	spr.position = origin + Vector2(randf_range(-40, 40), 0)
 	add_child(spr)
