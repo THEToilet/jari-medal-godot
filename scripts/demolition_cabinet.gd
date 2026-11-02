@@ -130,6 +130,10 @@ var _title_boot: bool = true
 var _wait_t: float = 0.0
 var _medals_txt: String = ""
 var debug_pattern: String = ""   # テスト用：煽りパターンを固定
+## デモ（アトラクト）：待機のまま DEMO_AFTER 秒たったら、自動で1プレイ見せる
+const DEMO_AFTER := 30.0
+var demo: bool = false
+var demo_label: Label
 var _result_lock: bool = false   # リザルト表示中はメダルを受け付けない
 ## メダルを入れたのに選ばないまましばらく経ったら、選び方の案内を出す
 const SELECT_HINT_AFTER := 6.0
@@ -183,6 +187,12 @@ func _ready() -> void:
 	_on_medals_changed(MedalWallet.medals)
 	Sfx.play_bgm()
 	_reset()
+	# デモ中にメダルが入って画面を作り直したときは、そのメダルをここで受け付ける
+	if Engine.has_meta("pending_coin"):
+		Engine.remove_meta("pending_coin")
+		_title_boot = false
+		await get_tree().process_frame
+		_insert()
 
 
 func _setup_input() -> void:
@@ -551,7 +561,7 @@ func _build_ui() -> void:
 		if not ResourceLoader.exists(cp):
 			break
 		_crank_frames.append(load(cp))
-	for k in ["stop", "charge", "push", "boom", "lose", "max"]:
+	for k in ["stop", "charge", "push", "boom", "lose", "max", "oshii"]:
 		var tp: String = "res://assets/text/%s.png" % k
 		if ResourceLoader.exists(tp):
 			_text_img[k] = load(tp)
@@ -599,6 +609,14 @@ func _enter(s: S) -> void:
 
 
 func _reset() -> void:
+	if demo:
+		# デモが終わったらタイトルに戻す
+		demo = false
+		debug_pattern = ""
+		_title_boot = true
+		if demo_label:
+			demo_label.visible = false
+	_wait_t = 0.0
 	_enter(S.WAIT)
 	power = 0.0
 	chosen = null
@@ -696,6 +714,9 @@ func _build_touch_ui() -> void:
 	b.add_theme_color_override("font_pressed_color", Color(0.15, 0.08, 0.05))
 	b.add_theme_color_override("font_hover_color", Color(0.15, 0.08, 0.05))
 	b.pressed.connect(func() -> void:
+		if demo:
+			_abort_demo(true)
+			return
 		if MedalWallet.medals <= 0:
 			MedalWallet.add(50)   # ブラウザ版はメダルが尽きたら自動で補充
 		_insert())
@@ -1373,6 +1394,13 @@ func _on_idle_warning(s: int) -> void:
 # ---------------------------------------------------------------- 入力
 
 func _unhandled_input(e: InputEvent) -> void:
+	if demo:
+		# デモ中：ボタンかメダルで本番に戻る（メダルはそのまま受け付ける）
+		if e.is_action_pressed("coin"):
+			_abort_demo(true)
+		elif _is_tap_press(e) or e.is_action_pressed("debug_add"):
+			_abort_demo(false)
+		return
 	if e.is_action_pressed("debug_add"):
 		MedalWallet.add(50)
 		if state == S.WAIT:
@@ -1424,7 +1452,7 @@ func _insert() -> void:
 	if bet >= MAX_BET:
 		Sfx.play("beep", 300.0, 0.15)
 		return
-	if not MedalWallet.spend(1):
+	if not demo and not MedalWallet.spend(1):
 		_say("メダルがない… [F2]でほじゅう")
 		Sfx.play("beep", 300.0, 0.2)
 		return
@@ -1605,6 +1633,8 @@ func _process(delta: float) -> void:
 		else:
 			_wait_t = 0.0
 			_title_boot = false
+		if state == S.WAIT and not demo and not _result_lock and _wait_t > DEMO_AFTER:
+			_run_demo()
 		var want: bool = state == S.WAIT and (_title_boot or _wait_t > TITLE_IDLE)
 		title_logo.modulate.a = move_toward(title_logo.modulate.a, 1.0 if want else 0.0, delta * 3.0)
 		title_logo.visible = title_logo.modulate.a > 0.0
@@ -1721,6 +1751,9 @@ func _detonate() -> void:
 	pt.tween_callback(_set_push_frame.bind(2))
 	var p: float = chance(chosen.data, bet, power)
 	var win: bool = randf() < p
+	if demo:
+		win = true   # デモは必ず成功して見せる
+		debug_pattern = "straight"
 	print("[抽選] %s 爆弾%d パワー%.2f → 確率%.1f%% → %s" % [chosen.data.name, bet, power, p * 100.0, "崩壊" if win else "残る"])
 	# スイッチを押した瞬間、溜めた電気が一気に建物へ走る
 	create_tween().tween_property(cable_gen, "power", 0.0, 0.3)
@@ -1754,6 +1787,7 @@ func chance(d: Dictionary, bombs: int, pw: float) -> float:
 func _play_result(win: bool) -> void:
 	var k: float = time_scale * float(chosen.data.get("tempo", 1.0))
 	var pat: String = _weighted(PATTERNS[win]) if debug_pattern == "" else debug_pattern
+	var was_demo: bool = demo
 	_pose(foreman, "chara/foreman_3")
 	_crowd = 1.0
 	await _explode()
@@ -1816,7 +1850,7 @@ func _play_result(win: bool) -> void:
 		await get_tree().create_timer(0.45).timeout
 		_end(payout)
 		await get_tree().create_timer(0.15).timeout
-		await tray.payout(payout, Vector2(CENTER_X, 560))
+		await tray.payout(payout, Vector2(CENTER_X, 560), not was_demo)
 		if min_show.time_left > 0.0:
 			await min_show.timeout
 		ui.visible = true
@@ -1827,7 +1861,7 @@ func _play_result(win: bool) -> void:
 	else:
 		_say("")
 		if pat == "near_miss":
-			_big("おしい……！", Color(1.0, 0.75, 0.2))
+			_big("おしい……！", Color(1.0, 0.75, 0.2), "oshii")
 		else:
 			_big("しっぱい……", Color(0.5, 0.75, 1.0), "lose")
 		Sfx.play_pitch("lose", 1.0, -2.0)
@@ -1841,6 +1875,70 @@ func _play_result(win: bool) -> void:
 		_cut_in("chara/bust_2", 1.0)
 	await get_tree().create_timer(0.6 if win else 2.0).timeout
 	_end(payout)
+
+
+## デモ：メダル3枚 → 高いビルを選ぶ → 連打 → 起爆 → 成功、を自動で見せる
+func _run_demo() -> void:
+	demo = true
+	_wait_t = 0.0
+	_title_boot = false
+	if demo_label == null:
+		demo_label = Label.new()
+		demo_label.text = "デモプレイ"
+		demo_label.add_theme_font_size_override("font_size", 40)
+		demo_label.add_theme_color_override("font_color", Color.WHITE)
+		demo_label.add_theme_color_override("font_outline_color", Color.BLACK)
+		demo_label.add_theme_constant_override("outline_size", 12)
+		if font:
+			demo_label.add_theme_font_override("font", font)
+		demo_label.position = Vector2(24, 1080 - 70)
+		demo_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		ui.add_child(demo_label)
+	demo_label.visible = true
+	var picks: Array = []
+	for d in BUILDINGS:
+		if int(d.payout) >= 8:
+			picks.append(d)
+	var target: Dictionary = picks[randi() % picks.size()]
+	for i in 3:
+		await get_tree().create_timer(0.6).timeout
+		if not demo:
+			return
+		_insert()
+	# ねらいのビルが真ん中で止まったら選ぶ（来なければ時間切れで今のを選ぶ）
+	var waited: float = 0.0
+	while demo and state == S.BET:
+		var c: Building = centered_building()
+		if (c and c.data == target and _dwell > 0.0) or waited > 15.0:
+			await get_tree().create_timer(0.2).timeout
+			if demo and state == S.BET:
+				_confirm()
+			break
+		await get_tree().process_frame
+		waited += get_process_delta_time()
+	# 連打
+	while demo and state != S.CHARGE and state != S.WAIT:
+		await get_tree().process_frame
+	while demo and state == S.CHARGE:
+		_on_tap()
+		await get_tree().create_timer(randf_range(0.11, 0.16)).timeout
+	# 起爆
+	while demo and state == S.DETONATE and not _armed:
+		await get_tree().process_frame
+	if demo and state == S.DETONATE:
+		await get_tree().create_timer(0.5).timeout
+		if demo and state == S.DETONATE:
+			_detonate()
+
+
+## デモを途中でやめて本番に戻る（画面を作り直すのがいちばん確実）
+func _abort_demo(with_coin: bool) -> void:
+	if with_coin:
+		Engine.set_meta("pending_coin", true)
+	Engine.time_scale = 1.0
+	Sfx.hum_level = 0.0
+	demo = false
+	get_tree().reload_current_scene()
 
 
 ## 失敗：監督が起爆器ごとズッコける

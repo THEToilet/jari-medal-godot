@@ -16,11 +16,12 @@ func setup(t: Texture2D) -> void:
 
 
 ## origin から n 枚噴き出させる
-func payout(n: int, origin: Vector2) -> void:
+func payout(n: int, origin: Vector2, credit: bool = true) -> void:
 	var interval: float = clampf(1.4 / maxf(n, 1), 0.035, 0.12)
 	for i in n:
 		_spawn(origin)
-		MedalWallet.add(1)
+		if credit:
+			MedalWallet.add(1)   # デモ中は本当には払い出さない
 		Sfx.play("coin", randf_range(1800.0, 2400.0), 0.18)
 		await get_tree().create_timer(interval).timeout
 	# 全部落ちきるまで待つ
