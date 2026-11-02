@@ -21,6 +21,8 @@ var flow: float = 0.0
 var cut: float = 0.0
 var _phase: float = 0.0
 var _t: float = 0.0
+var _last_cut: float = -1.0
+var _dirty: bool = true
 
 
 func set_ends(a: Vector2, b: Vector2) -> void:
@@ -31,13 +33,18 @@ func set_ends(a: Vector2, b: Vector2) -> void:
 	curve.bake_interval = 10.0
 	points = curve.get_baked_points()
 	cut = 0.0
+	_dirty = true
 	queue_redraw()
 
 
 func _process(delta: float) -> void:
 	_t += delta
 	_phase = fmod(_phase + delta * (0.25 + flow * 0.09), 1.0)
-	queue_redraw()
+	# 電気が流れていない間は絵が変わらないので描き直さない（軽量化）
+	if visible and (power > 0.01 or cut != _last_cut or _dirty):
+		_last_cut = cut
+		_dirty = power > 0.01
+		queue_redraw()
 
 
 func _draw() -> void:

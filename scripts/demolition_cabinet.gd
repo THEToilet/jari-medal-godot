@@ -120,6 +120,9 @@ const TITLE_W := 1100.0
 const TITLE_IDLE := 15.0
 var _title_boot: bool = true
 var _wait_t: float = 0.0
+var _medals_txt: String = ""
+var _preloaded: Array[Resource] = []
+var _fps_acc: float = 0.0
 var _fear: int = 0                # 積まれた箱の数（作業員のビビり具合）
 var sweat: SweatDrops
 var has_worker_scared: bool = false
@@ -290,6 +293,10 @@ func _build_world() -> void:
 
 	worker = _chara(WORKER_POS, WORKER_SCALE)
 	_worker_idle()
+	# 最初の投入でカクッとしないよう、クレーンの絵と音は先に読み込んでおく
+	for pre in ["res://assets/crane_hook.png", "res://assets/crane_rope.png"]:
+		if ResourceLoader.exists(pre):
+			_preloaded.append(load(pre))
 	sweat = SweatDrops.new()
 	sweat.position = WORKER_HEAD
 	sweat.z_index = 8
@@ -1109,6 +1116,7 @@ func _clear_sticks() -> void:
 
 func _on_medals_changed(m: int) -> void:
 	lbl_medals.text = "MEDAL × %d" % m
+	_medals_txt = lbl_medals.text
 
 
 func _on_idle_warning(s: int) -> void:
@@ -1281,6 +1289,8 @@ func _zoom() -> void:
 
 
 func _start_charge() -> void:
+	# 回し始めたら汗は引っ込めて、いつものクランクの絵に戻す
+	_reset_fear()
 	power = 0.0
 	_charge_left = charge_time
 	_enter(S.CHARGE)
@@ -1313,6 +1323,13 @@ func _on_tap() -> void:
 
 func _process(delta: float) -> void:
 	super(delta)
+	# デバッグ表示：フレームレート（カクつき確認用）
+	_fps_acc += delta
+	if SHOW_DEBUG_MEDAL and _fps_acc > 0.5:
+		_fps_acc = 0.0
+		if _medals_txt == "":
+			_medals_txt = lbl_medals.text
+		lbl_medals.text = "%s   FPS %d" % [_medals_txt, Engine.get_frames_per_second()]
 	if title_logo:
 		if state == S.WAIT:
 			_wait_t += delta
@@ -1744,9 +1761,14 @@ class DemolitionCabinetPile:
 ## 導火線の火花
 class FuseSpark extends Node2D:
 	var size: float = 1.0
+	var _acc: float = randf() * 0.07
 
-	func _process(_delta: float) -> void:
-		queue_redraw()
+	func _process(delta: float) -> void:
+		# ちらつきは1秒に15回くらいで十分（毎フレーム描き直すと重い）
+		_acc += delta
+		if _acc >= 0.066:
+			_acc = 0.0
+			queue_redraw()
 
 	func _draw() -> void:
 		var r: float = (3.0 + randf() * 3.0) * size
