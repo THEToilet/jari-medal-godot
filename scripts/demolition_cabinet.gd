@@ -1895,7 +1895,10 @@ func _smoke_cover(dur: float) -> void:
 	var w: float = chosen.size().x * s
 	var h: float = chosen.size().y * s
 	var tex: Texture2D = _tex["dust-cloud"]
-	var cw: float = clampf(w * 0.8, 300.0, 560.0)          # 雲1つの表示幅
+	# 雲の大きさ・位置のばらつきは建物ごとに決まった並び（毎回同じ形で隠れる）
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(str(chosen.data.file))
+	var cw: float = clampf(w * 0.8, 300.0, 560.0)          # 雲1つの表示幅（基準）
 	var sc: float = cw / tex.get_width()
 	var ch: float = tex.get_height() * sc
 	var left: float = CENTER_X - w / 2.0 - 40.0
@@ -1913,14 +1916,14 @@ func _smoke_cover(dur: float) -> void:
 		for c in n:
 			var sm := Sprite2D.new()
 			sm.texture = tex
-			sm.position = Vector2(CENTER_X - span / 2.0 + c * step_x + randf_range(-8, 8), y + randf_range(-6, 6))
+			sm.position = Vector2(CENTER_X - span / 2.0 + c * step_x + rng.randf_range(-step_x * 0.18, step_x * 0.18), y + rng.randf_range(-step_y * 0.2, step_y * 0.2))
 			sm.scale = Vector2(0.15, 0.15) * sc
 			sm.modulate.a = 0.0
-			sm.flip_h = (r + c) % 2 == 1
+			sm.flip_h = rng.randf() < 0.5
 			sm.z_index = 5
 			fx.add_child(sm)
 			_smokes.append(sm)
-			var tgt: float = sc * randf_range(1.0, 1.1)
+			var tgt: float = sc * rng.randf_range(0.8, 1.35)
 			var tw := create_tween().set_parallel(true)
 			tw.tween_interval(dur * 0.35 * float(r) / float(rows))
 			tw.chain().tween_property(sm, "scale", Vector2(tgt, tgt), dur * 0.7).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
