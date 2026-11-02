@@ -23,6 +23,7 @@ var _t: float = 0.0
 var _alpha: float = 0.0
 var _confetti: Array[Dictionary] = []
 var _sparks: Array[Dictionary] = []
+var _slam_t: float = 9.0
 var _next_fw: float = 0.0
 
 var title: Label
@@ -151,11 +152,18 @@ func show_result(payout: int, building_name: String, num_tex: Texture2D) -> void
 	tw.tween_property(self, "_alpha", 1.0, 0.25)
 	title.scale = Vector2(0.1, 0.1)
 	create_tween().tween_property(title, "scale", Vector2.ONE, 0.45).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
-	num.scale = Vector2.ZERO
+	# 数字が主役：最初から画面いっぱいの大きさで上から叩きつけて「ドン！」
+	num.scale = Vector2(ns * 3.2, ns * 3.2)
+	num.modulate.a = 0.0
 	var nt := create_tween()
-	nt.tween_interval(0.35)
-	nt.tween_property(num, "scale", Vector2(ns * 1.35, ns * 1.35), 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	nt.tween_property(num, "scale", Vector2(ns, ns), 0.18)
+	nt.tween_interval(0.12)
+	nt.set_parallel(true)
+	nt.tween_property(num, "modulate:a", 1.0, 0.08)
+	nt.tween_property(num, "scale", Vector2(ns * 0.85, ns * 0.85), 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	nt.set_parallel(false)
+	nt.tween_callback(_num_slam)
+	nt.tween_property(num, "scale", Vector2(ns * 1.12, ns * 1.12), 0.1).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	nt.tween_property(num, "scale", Vector2(ns, ns), 0.25).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
 	for l in [sub, get_lbl, get_spr]:
 		l.modulate.a = 0.0
 		var lt := create_tween()
@@ -165,6 +173,19 @@ func show_result(payout: int, building_name: String, num_tex: Texture2D) -> void
 		c.modulate.a = 0.0
 		create_tween().tween_property(c, "modulate:a", 1.0, 0.3)
 	_burst_confetti(80 + rank * 70)
+
+
+## 数字が着地した瞬間：画面が揺れて、白い衝撃の輪とキラキラが飛ぶ
+func _num_slam() -> void:
+	_slam_t = 0.0
+	Sfx.play_pitch("thud", 0.8, 2.0)
+	Sfx.play("coin", 1500.0, 0.25)
+	var cab: Node = get_parent()
+	if cab and cab.has_method("_shake"):
+		cab._shake(14.0 + rank * 6.0, 0.35)
+	for i in 24 + rank * 12:
+		var a: float = TAU * i / (24.0 + rank * 12.0)
+		_sparks.append({"p": num.position, "v": Vector2(cos(a), sin(a)) * randf_range(380, 760), "life": 1.0, "c": Color(1, 0.95, 0.5)})
 
 
 func hide_result() -> void:
@@ -235,6 +256,7 @@ func _process(delta: float) -> void:
 		if sp.life > 0.0:
 			alive.append(sp)
 	_sparks = alive
+	_slam_t += delta
 	queue_redraw()
 
 
@@ -274,6 +296,11 @@ func _draw() -> void:
 		var col: Color = sp.c
 		col.a = sp.life
 		draw_circle(sp.p, 5.0 * sp.life + 2.0, col)
+	# 数字が着地した衝撃の輪
+	if _slam_t < 0.45:
+		var k: float = _slam_t / 0.45
+		draw_arc(num.position, 140.0 + 520.0 * k, 0, TAU, 64, Color(1, 1, 0.9, 1.0 - k), 26.0 * (1.0 - k) + 3.0)
+		draw_arc(num.position, 100.0 + 320.0 * k, 0, TAU, 64, Color(1, 0.85, 0.3, 0.8 * (1.0 - k)), 14.0 * (1.0 - k) + 2.0)
 
 
 ## 光線画像の中心に敷く白い円（数字を読みやすくする）
