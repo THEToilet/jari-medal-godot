@@ -1,5 +1,10 @@
 name: Web版をGitHub Pagesに公開
 
+# ルート … main の Web 版（2D）
+# /virtual/ … 仮想筐体（3D）。VIRTUAL_BRANCH があればそのブランチから、無ければ main から作る
+#             （書き出し設定「Web Virtual」が無ければ作らない）
+# VIRTUAL_BRANCH に push したときは preview-trigger.yml がこのワークフローを main で動かす
+
 on:
   push:
     branches: [main]
@@ -16,12 +21,23 @@ concurrency:
 
 env:
   GODOT_VERSION: 4.6.3
+  VIRTUAL_BRANCH: feature/virtual-cabinet
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: 仮想筐体のブランチを取得（あれば）
+        run: |
+          if git ls-remote --exit-code --heads origin "$VIRTUAL_BRANCH" > /dev/null; then
+            git fetch --depth 1 origin "$VIRTUAL_BRANCH"
+            git worktree add "$RUNNER_TEMP/virtual" FETCH_HEAD
+            echo "VIRTUAL_DIR=$RUNNER_TEMP/virtual" >> "$GITHUB_ENV"
+          else
+            echo "VIRTUAL_DIR=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
+          fi
 
       - name: Godot と Web 書き出しテンプレートを用意
         run: |
@@ -43,6 +59,21 @@ jobs:
           sed -i "s/\"executable\":\"index\"/\"executable\":\"index\",\"mainPack\":\"index.pck?v=${GITHUB_SHA::8}\"/" build/web/index.html
           grep -o '"mainPack":"[^"]*"' build/web/index.html
           ls -la build/web
+
+      - name: 仮想筐体を /virtual/ に書き出し
+        run: |
+          if ! grep -q '^name="Web Virtual"' "$VIRTUAL_DIR/export_presets.cfg"; then
+            echo "書き出し設定 Web Virtual が無いのでスキップ"; exit 0
+          fi
+          touch "$GITHUB_WORKSPACE/build/.gdignore"   # main から作るとき、書き出し済みのファイルを読み込まないように
+          out="$GITHUB_WORKSPACE/build/web/virtual"
+          mkdir -p "$out"
+          ./godot --headless --path "$VIRTUAL_DIR" --import || true
+          ./godot --headless --path "$VIRTUAL_DIR" --export-release "Web Virtual" "$out/index.html"
+          sha=$(git -C "$VIRTUAL_DIR" rev-parse --short=8 HEAD)
+          sed -i "s/\"executable\":\"index\"/\"executable\":\"index\",\"mainPack\":\"index.pck?v=${sha}\"/" "$out/index.html"
+          grep -o '"mainPack":"[^"]*"' "$out/index.html"
+          ls -la "$out"
 
       - uses: actions/upload-pages-artifact@v3
         with:
