@@ -10,3 +10,6 @@ godot_path.bad.txt
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Web 書き出し先
+build/

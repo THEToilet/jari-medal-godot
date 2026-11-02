@@ -2,6 +2,10 @@
 
 Godot 4.6以上 / GL Compatibility / 1920×1080
 
+## ブラウザ版（スマホでも遊べる）
+main ブランチに push すると、GitHub Actions が Web 版を書き出して GitHub Pages に公開する（`.github/workflows/pages.yml`）。
+スマホでは右上の「メダル投入」ボタンでメダルを入れ、画面タップがボタンの代わり。メダルが尽きたら投入ボタンで自動補充される。
+
 ## 起動
 - `play.bat` … ゲームを起動
 - `edit.bat` … Godotエディタで開く

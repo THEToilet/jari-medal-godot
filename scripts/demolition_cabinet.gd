@@ -117,7 +117,7 @@ var marker: SelectMarker
 var tag_layer: Node2D
 var uplight: UpLight
 var uplight_front: UpLight
-var font: SystemFont
+var font: Font
 var lbl_msg: Label
 var lbl_timer: Label
 var fuse: FuseTimer
@@ -245,7 +245,6 @@ func _build_world() -> void:
 	add_child(uplight_front)
 	# 数字の札は光の手前、電線は建物の手前に描く
 	move_child(tag_layer, get_child_count() - 1)
-	move_child(cable, get_child_count() - 1)
 
 	cable = Cable.new()
 	cable.visible = false
@@ -400,9 +399,14 @@ func _build_ui() -> void:
 	ui.set_anchors_preset(Control.PRESET_FULL_RECT)
 	ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var theme := Theme.new()
-	font = SystemFont.new()
-	font.font_names = PackedStringArray(["Yu Gothic UI", "Meiryo", "Hiragino Sans", "Noto Sans CJK JP", "Noto Sans JP", "sans-serif"])
-	font.font_weight = 800
+	# 同梱フォント（ブラウザ版でも日本語が出るように）。無ければシステムフォント
+	if ResourceLoader.exists("res://assets/fonts/NotoSansJP-Black-subset.otf"):
+		font = load("res://assets/fonts/NotoSansJP-Black-subset.otf")
+	else:
+		var sf := SystemFont.new()
+		sf.font_names = PackedStringArray(["Yu Gothic UI", "Meiryo", "Hiragino Sans", "Noto Sans CJK JP", "sans-serif"])
+		sf.font_weight = 800
+		font = sf
 	theme.default_font = font
 	ui.theme = theme
 	layer.add_child(ui)
@@ -463,6 +467,7 @@ func _build_ui() -> void:
 	btn_hint.position = Vector2(CENTER_X, 860)   # 画面中央にでかでかと
 	btn_hint.visible = false
 	ui.add_child(btn_hint)
+	_build_touch_ui()
 	lbl_idle = _label(150, Color(1, 0.2, 0.2), 24)
 	_center(lbl_idle, Vector2(960, 300), 600)
 	lbl_big = _label(170, Color(1, 0.85, 0.05), 30)
@@ -563,6 +568,36 @@ func _reset() -> void:
 		if state != S.WAIT:
 			return
 	_say_wait()
+
+
+## スマホ・ブラウザ用：画面にメダル投入ボタンを出す（筐体では出さない）
+func _build_touch_ui() -> void:
+	if not (OS.has_feature("web") or DisplayServer.is_touchscreen_available() or OS.has_feature("mobile")):
+		return
+	var b := Button.new()
+	b.text = "メダル\n投入"
+	b.focus_mode = Control.FOCUS_NONE
+	b.size = Vector2(200, 160)
+	b.position = Vector2(1920 - 200 - 24, 24)
+	b.add_theme_font_size_override("font_size", 44)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(1, 0.75, 0.1)
+	sb.border_color = Color(0.1, 0.06, 0.05)
+	sb.set_border_width_all(8)
+	sb.set_corner_radius_all(28)
+	b.add_theme_stylebox_override("normal", sb)
+	var sp := sb.duplicate() as StyleBoxFlat
+	sp.bg_color = Color(1, 0.6, 0.05)
+	b.add_theme_stylebox_override("pressed", sp)
+	b.add_theme_stylebox_override("hover", sb)
+	b.add_theme_color_override("font_color", Color(0.15, 0.08, 0.05))
+	b.add_theme_color_override("font_pressed_color", Color(0.15, 0.08, 0.05))
+	b.add_theme_color_override("font_hover_color", Color(0.15, 0.08, 0.05))
+	b.pressed.connect(func() -> void:
+		if MedalWallet.medals <= 0:
+			MedalWallet.add(50)   # ブラウザ版はメダルが尽きたら自動で補充
+		_insert())
+	ui.add_child(b)
 
 
 func _say_wait() -> void:

@@ -1,0 +1,56 @@
+name: Web版をGitHub Pagesに公開
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: 4.6.3
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Godot と Web 書き出しテンプレートを用意
+        run: |
+          base=https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable
+          curl -sSL -o godot.zip "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip
+          mv Godot_v${GODOT_VERSION}-stable_linux.x86_64 godot
+          python3 .github/scripts/fetch_web_templates.py \
+            "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz" \
+            "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable" \
+            version.txt web_nothreads_release.zip web_nothreads_debug.zip
+
+      - name: Web 版を書き出し
+        run: |
+          mkdir -p build/web
+          ./godot --headless --path . --import || true
+          ./godot --headless --path . --export-release "Web" build/web/index.html
+          ls -la build/web
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
