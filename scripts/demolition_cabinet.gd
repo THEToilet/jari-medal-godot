@@ -133,7 +133,7 @@ var debug_pattern: String = ""   # テスト用：煽りパターンを固定
 ## デモ（アトラクト）：待機のまま DEMO_AFTER 秒たったら、自動で1プレイ見せる
 const DEMO_AFTER := 12.0
 var demo: bool = false
-var demo_label: Label
+var demo_label: Control
 var _result_lock: bool = false   # リザルト表示中はメダルを受け付けない
 ## メダルを入れたのに選ばないまましばらく経ったら、選び方の案内を出す
 const SELECT_HINT_AFTER := 6.0
@@ -1883,17 +1883,7 @@ func _run_demo() -> void:
 	_wait_t = 0.0
 	_title_boot = false
 	if demo_label == null:
-		demo_label = Label.new()
-		demo_label.text = "デモプレイ"
-		demo_label.add_theme_font_size_override("font_size", 40)
-		demo_label.add_theme_color_override("font_color", Color.WHITE)
-		demo_label.add_theme_color_override("font_outline_color", Color.BLACK)
-		demo_label.add_theme_constant_override("outline_size", 12)
-		if font:
-			demo_label.add_theme_font_override("font", font)
-		demo_label.position = Vector2(24, 1080 - 70)
-		demo_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		ui.add_child(demo_label)
+		_build_demo_badge()
 	demo_label.visible = true
 	var picks: Array = []
 	for d in BUILDINGS:
@@ -1929,6 +1919,69 @@ func _run_demo() -> void:
 		await get_tree().create_timer(0.5).timeout
 		if demo and state == S.DETONATE:
 			_detonate()
+
+
+## 左上の「デモプレイ」札：赤い札に黄色のフチ、白い文字、点滅ランプ。ゆらゆら揺れる
+func _build_demo_badge() -> void:
+	var p := Panel.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.85, 0.12, 0.1)
+	sb.border_color = Color(1.0, 0.82, 0.1)
+	sb.set_border_width_all(7)
+	sb.set_corner_radius_all(22)
+	sb.shadow_color = Color(0, 0, 0, 0.45)
+	sb.shadow_size = 4
+	sb.shadow_offset = Vector2(5, 7)
+	p.add_theme_stylebox_override("panel", sb)
+	p.size = Vector2(330, 92)
+	p.position = Vector2(26, 56)
+	p.pivot_offset = p.size / 2.0
+	p.rotation = deg_to_rad(-4)
+	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# 黒い外フチ
+	var outer := Panel.new()
+	var so := StyleBoxFlat.new()
+	so.bg_color = Color(0, 0, 0, 0)
+	so.border_color = Color(0.06, 0.04, 0.05)
+	so.set_border_width_all(5)
+	so.set_corner_radius_all(26)
+	outer.add_theme_stylebox_override("panel", so)
+	outer.position = Vector2(-5, -5)
+	outer.size = p.size + Vector2(10, 10)
+	outer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.add_child(outer)
+	# 点滅ランプ
+	var lamp := Panel.new()
+	var sl := StyleBoxFlat.new()
+	sl.bg_color = Color(1, 1, 0.85)
+	sl.border_color = Color(0.06, 0.04, 0.05)
+	sl.set_border_width_all(4)
+	sl.set_corner_radius_all(16)
+	lamp.add_theme_stylebox_override("panel", sl)
+	lamp.size = Vector2(32, 32)
+	lamp.position = Vector2(22, 30)
+	lamp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.add_child(lamp)
+	var bl := lamp.create_tween().set_loops()
+	bl.tween_property(lamp, "modulate:a", 0.15, 0.4)
+	bl.tween_property(lamp, "modulate:a", 1.0, 0.4)
+	var l := Label.new()
+	l.text = "デモプレイ"
+	l.add_theme_font_size_override("font_size", 54)
+	l.add_theme_color_override("font_color", Color.WHITE)
+	l.add_theme_color_override("font_outline_color", Color(0.06, 0.04, 0.05))
+	l.add_theme_constant_override("outline_size", 16)
+	if font:
+		l.add_theme_font_override("font", font)
+	l.position = Vector2(66, 6)
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.add_child(l)
+	# ゆらゆら
+	var sw := p.create_tween().set_loops()
+	sw.tween_property(p, "rotation", deg_to_rad(-1), 0.9).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	sw.tween_property(p, "rotation", deg_to_rad(-5), 0.9).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	ui.add_child(p)
+	demo_label = p
 
 
 ## デモを途中でやめて本番に戻る（画面を作り直すのがいちばん確実）
