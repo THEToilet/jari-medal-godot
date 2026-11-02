@@ -197,7 +197,7 @@ func _ready() -> void:
 			title_logo.modulate.a = 0.0
 	if Engine.has_meta("fade_in"):
 		Engine.remove_meta("fade_in")
-		Fader.fade_in(0.3)
+		Fader.dissolve(0.45)
 	if coin:
 		await get_tree().process_frame
 		_insert(true)
@@ -1656,7 +1656,7 @@ func _process(delta: float) -> void:
 	else:
 		_bet_idle = 0.0
 	if select_hint:
-		var show_hint: bool = state == S.BET and _bet_idle > SELECT_HINT_AFTER
+		var show_hint: bool = state == S.BET and _bet_idle > SELECT_HINT_AFTER and not demo
 		if show_hint and not select_hint.visible:
 			select_hint.scale = Vector2(0.4, 0.4)
 			create_tween().tween_property(select_hint, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
@@ -1942,7 +1942,7 @@ func _build_demo_badge() -> void:
 	sb.shadow_size = 4
 	sb.shadow_offset = Vector2(5, 7)
 	p.add_theme_stylebox_override("panel", sb)
-	p.size = Vector2(330, 92)
+	p.size = Vector2(300, 92)
 	p.position = Vector2(26, 56)
 	p.pivot_offset = p.size / 2.0
 	p.rotation = deg_to_rad(-4)
@@ -1959,21 +1959,6 @@ func _build_demo_badge() -> void:
 	outer.size = p.size + Vector2(10, 10)
 	outer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	p.add_child(outer)
-	# 点滅ランプ
-	var lamp := Panel.new()
-	var sl := StyleBoxFlat.new()
-	sl.bg_color = Color(1, 1, 0.85)
-	sl.border_color = Color(0.06, 0.04, 0.05)
-	sl.set_border_width_all(4)
-	sl.set_corner_radius_all(16)
-	lamp.add_theme_stylebox_override("panel", sl)
-	lamp.size = Vector2(32, 32)
-	lamp.position = Vector2(22, 30)
-	lamp.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	p.add_child(lamp)
-	var bl := lamp.create_tween().set_loops()
-	bl.tween_property(lamp, "modulate:a", 0.15, 0.4)
-	bl.tween_property(lamp, "modulate:a", 1.0, 0.4)
 	var l := Label.new()
 	l.text = "デモプレイ"
 	l.add_theme_font_size_override("font_size", 54)
@@ -1982,7 +1967,9 @@ func _build_demo_badge() -> void:
 	l.add_theme_constant_override("outline_size", 16)
 	if font:
 		l.add_theme_font_override("font", font)
-	l.position = Vector2(66, 6)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.size = Vector2(p.size.x, 0)
+	l.position = Vector2(0, 6)
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	p.add_child(l)
 	# ゆらゆら
@@ -2004,8 +1991,9 @@ func _abort_demo(with_coin: bool) -> void:
 	Engine.time_scale = 1.0
 	Sfx.hum_level = 0.0
 	demo = false
-	# すっと暗転して作り直し、明けたら本番（継ぎ目を見せない）
-	await Fader.fade_out(0.15)
+	# 今の画面を写真に撮って貼り、裏で作り直して、写真をふわっと溶かす（暗転しない）
+	await RenderingServer.frame_post_draw
+	Fader.snapshot()
 	Engine.set_meta("fade_in", true)
 	get_tree().reload_current_scene()
 
