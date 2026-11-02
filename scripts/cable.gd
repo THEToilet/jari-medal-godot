@@ -1,13 +1,15 @@
 class_name Cable
 extends Node2D
 ## 発電機からビルへの電線。ほかの素材に合わせて太い黒フチ＋ベタ塗り。
-## パワーが溜まるほど、電線が黄色く光り、電気の粒が速く・大きく・多く流れ、
-## 満タン近くでは電線全体にビリビリの稲妻がまとわりつく。
+## 電気は雷切みたいな青白い光。パワーが溜まるほど電線が青白く光り、
+## 電気の粒が速く・大きく・多く流れ、稲妻がバチバチ枝分かれしてまとわりつく。
 
 const WIRE := Color(0.86, 0.16, 0.12)        # 赤い被覆
 const WIRE_HI := Color(1.0, 0.55, 0.45)      # ハイライト
 const OUTLINE := Color(0.08, 0.05, 0.05)
-const GLOW := Color(1.0, 0.92, 0.25)
+const GLOW := Color(0.45, 0.8, 1.0)         # 青白い光
+const CORE := Color(0.92, 0.98, 1.0)         # 稲妻の芯（ほぼ白）
+const AURA := Color(0.25, 0.55, 1.0)         # 稲妻の外側の青
 
 var points: PackedVector2Array = PackedVector2Array()
 var power: float = 0.0
@@ -60,22 +62,30 @@ func _draw() -> void:
 		var t: float = fmod(_phase + float(i) / n, 1.0)
 		var p: Vector2 = _at(t)
 		var r: float = 7.0 + power * 9.0
+		draw_circle(p, r * 2.2, Color(AURA, 0.25))
 		draw_circle(p, r + 3.0, OUTLINE)
 		draw_circle(p, r, GLOW)
-		draw_circle(p + Vector2(-r * 0.3, -r * 0.3), r * 0.35, Color.WHITE)
+		draw_circle(p, r * 0.6, CORE)
 		if power > 0.5:
-			_star(p, r * 2.0, Color(1, 1, 0.8, 0.9))
+			_star(p, r * 2.2, Color(CORE, 0.95))
 	# 満タン近く：電線にまとわりつく稲妻
-	if power > 0.6:
-		var bolts: int = 1 + int((power - 0.6) * 10.0)
+	if power > 0.35:
+		var bolts: int = 1 + int((power - 0.35) * 14.0)
 		for b in bolts:
-			var t0: float = randf_range(0.05, 0.8)
+			var t0: float = randf_range(0.02, 0.85)
 			var bolt := PackedVector2Array()
-			for s in 7:
-				var p: Vector2 = _at(t0 + s * 0.025)
-				bolt.append(p + Vector2(randf_range(-22, 22), randf_range(-22, 22)))
-			draw_polyline(bolt, OUTLINE, 9.0)
-			draw_polyline(bolt, Color(1, 1, 0.5), 4.0)
+			var amp: float = 14.0 + 26.0 * power
+			for s in 8:
+				var p: Vector2 = _at(t0 + s * 0.022)
+				bolt.append(p + Vector2(randf_range(-amp, amp), randf_range(-amp, amp)))
+			_bolt(bolt, 1.0)
+			# 枝分かれ
+			var k: int = randi_range(2, 5)
+			var br := PackedVector2Array([bolt[k]])
+			var dir: Vector2 = Vector2.UP.rotated(randf_range(-2.0, 2.0))
+			for s in 3:
+				br.append(br[br.size() - 1] + dir * 22.0 + Vector2(randf_range(-12, 12), randf_range(-12, 12)))
+			_bolt(br, 0.6)
 	# ビル側の端でスパーク
 	if power > 0.75:
 		var end: Vector2 = points[points.size() - 1]
@@ -86,8 +96,15 @@ func _draw() -> void:
 			for s in 5:
 				bolt.append(p2)
 				p2 += dir * 20.0 + Vector2(randf_range(-10, 10), randf_range(-10, 10))
-			draw_polyline(bolt, OUTLINE, 8.0)
-			draw_polyline(bolt, Color(1, 0.95, 0.3), 4.0)
+			_bolt(bolt, 0.9)
+
+
+## 雷切風の稲妻：青いオーラ → 黒フチ → 水色 → 白い芯
+func _bolt(pts: PackedVector2Array, w: float) -> void:
+	draw_polyline(pts, Color(AURA, 0.35), 22.0 * w)
+	draw_polyline(pts, OUTLINE, 10.0 * w)
+	draw_polyline(pts, GLOW, 6.0 * w)
+	draw_polyline(pts, CORE, 2.5 * w)
 
 
 func _star(c: Vector2, size: float, col: Color) -> void:

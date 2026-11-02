@@ -111,6 +111,10 @@ var ui: Control
 var lbl_medals: Label
 var lbl_credit: Label
 var insert_sign: InsertSign
+var title_logo: Sprite2D
+## 待機画面のタイトルロゴ（中心位置と表示幅）
+const TITLE_POS := Vector2(960, 215)
+const TITLE_W := 760.0
 var rack: Array[RigidBody2D] = []        # ベットするごとに画面下に降ってくるダイナマイト（物理）
 var base_sticks: Array[RigidBody2D] = []  # ビルの足元に仕掛けたダイナマイト（物理）
 var marker: SelectMarker
@@ -452,6 +456,12 @@ func _build_ui() -> void:
 	insert_sign.position = Vector2(960, 945)
 	insert_sign.setup(font)
 	ui.add_child(insert_sign)
+	if ResourceLoader.exists("res://assets/title_logo.png"):
+		title_logo = Sprite2D.new()
+		title_logo.texture = load("res://assets/title_logo.png")
+		title_logo.position = TITLE_POS
+		title_logo.scale = Vector2.ONE * (TITLE_W / title_logo.texture.get_width())
+		ui.add_child(title_logo)
 	lbl_msg = _label(54, Color.WHITE, 16)
 	_center(lbl_msg, Vector2(1060, 24), 1200)
 	lbl_timer = _label(72, Color(1, 0.95, 0.4), 18)
@@ -1106,6 +1116,8 @@ func _on_tap() -> void:
 
 func _process(delta: float) -> void:
 	super(delta)
+	if title_logo:
+		title_logo.visible = insert_sign.visible   # 待機中だけ出す
 	if _shake_amt > 0.0:
 		cam.offset = Vector2(randf_range(-1, 1), randf_range(-1, 1)) * _shake_amt
 	else:
