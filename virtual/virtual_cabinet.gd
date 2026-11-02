@@ -13,6 +13,7 @@ const MEDAL_H := 0.0025
 @onready var cabinet: Node3D = $Cabinet
 @onready var game_viewport: SubViewport = $GameViewport
 @onready var game: Node = $GameViewport/Game
+const GAME_SCENE := preload("res://scenes/main.tscn")
 @onready var camera: Camera3D = $Camera3D
 
 var _button_cap: MeshInstance3D
@@ -94,7 +95,26 @@ func _ready() -> void:
 	var tray := _pocket.get_aabb().get_center()
 	_cam_tray = Transform3D(Basis(), tray + Vector3(0, 0.32, 1.15)).looking_at(tray + Vector3(0, 0.1, 0), Vector3.UP)
 
+	# 暗転（Autoload）は筐体の画面の中だけにかける
+	Fader.reparent.call_deferred(game_viewport)
+	_hook_game()
+
+
+func _hook_game() -> void:
 	game.finished.connect(_on_finished)
+	game.restart_requested.connect(_restart_game)
+
+
+## デモ中にメダルが入ったとき：ゲームの画面だけを作り直す（2D版の reload_current_scene の代わり）
+func _restart_game() -> void:
+	var old := game
+	game = GAME_SCENE.instantiate()
+	old.name = "OldGame"
+	old.queue_free()
+	game.name = "Game"
+	game_viewport.add_child(game)
+	game_viewport.move_child(Fader, -1)   # 暗転を一番上に
+	_hook_game()
 
 
 ## くぼみの当たりは箱で作る（薄いメダルがメッシュの当たりをすり抜けないように）
