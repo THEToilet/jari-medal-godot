@@ -19,6 +19,7 @@ general/default_playback_type.web=1
 
 MedalWallet="*res://scripts/medal_wallet.gd"
 Sfx="*res://scripts/sfx.gd"
+Fader="*res://scripts/fader.gd"
 
 [display]
 

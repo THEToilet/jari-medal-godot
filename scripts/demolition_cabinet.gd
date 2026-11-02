@@ -133,6 +133,7 @@ var debug_pattern: String = ""   # テスト用：煽りパターンを固定
 ## デモ（アトラクト）：待機のまま DEMO_AFTER 秒たったら、自動で1プレイ見せる
 const DEMO_AFTER := 12.0
 var demo: bool = false
+var _aborting: bool = false
 var demo_label: Control
 var _result_lock: bool = false   # リザルト表示中はメダルを受け付けない
 ## メダルを入れたのに選ばないまましばらく経ったら、選び方の案内を出す
@@ -188,11 +189,18 @@ func _ready() -> void:
 	Sfx.play_bgm()
 	_reset()
 	# デモ中にメダルが入って画面を作り直したときは、そのメダルをここで受け付ける
-	if Engine.has_meta("pending_coin"):
+	var coin: bool = Engine.has_meta("pending_coin")
+	if coin:
 		Engine.remove_meta("pending_coin")
 		_title_boot = false
+		if title_logo:
+			title_logo.modulate.a = 0.0
+	if Engine.has_meta("fade_in"):
+		Engine.remove_meta("fade_in")
+		Fader.fade_in(0.3)
+	if coin:
 		await get_tree().process_frame
-		_insert()
+		_insert(true)
 
 
 func _setup_input() -> void:
@@ -1443,7 +1451,7 @@ func _tap_held() -> bool:
 	return Input.is_action_pressed("tap") or Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
 
 
-func _insert() -> void:
+func _insert(silent: bool = false) -> void:
 	if _result_lock:
 		return
 	if state != S.WAIT and state != S.BET:
@@ -1457,7 +1465,8 @@ func _insert() -> void:
 		Sfx.play("beep", 300.0, 0.2)
 		return
 	bet += 1
-	Sfx.play("coin", 1500.0, 0.25)
+	if not silent:
+		Sfx.play("coin", 1500.0, 0.25)
 	if state == S.WAIT:
 		_enter(S.BET)
 		_pose(foreman, "chara/foreman_2")
@@ -1986,11 +1995,18 @@ func _build_demo_badge() -> void:
 
 ## デモを途中でやめて本番に戻る（画面を作り直すのがいちばん確実）
 func _abort_demo(with_coin: bool) -> void:
+	if _aborting:
+		return
+	_aborting = true
 	if with_coin:
 		Engine.set_meta("pending_coin", true)
+		Sfx.play("coin", 1500.0, 0.25)   # 入れた瞬間に音で応える
 	Engine.time_scale = 1.0
 	Sfx.hum_level = 0.0
 	demo = false
+	# すっと暗転して作り直し、明けたら本番（継ぎ目を見せない）
+	await Fader.fade_out(0.15)
+	Engine.set_meta("fade_in", true)
 	get_tree().reload_current_scene()
 
 
