@@ -113,8 +113,8 @@ var lbl_credit: Label
 var insert_sign: InsertSign
 var title_logo: Sprite2D
 ## 待機画面のタイトルロゴ（中心位置と表示幅）
-const TITLE_POS := Vector2(960, 215)
-const TITLE_W := 760.0
+const TITLE_POS := Vector2(960, 370)
+const TITLE_W := 1100.0
 var rack: Array[RigidBody2D] = []        # ベットするごとに画面下に降ってくるダイナマイト（物理）
 var base_sticks: Array[RigidBody2D] = []  # ビルの足元に仕掛けたダイナマイト（物理）
 var marker: SelectMarker
