@@ -487,7 +487,7 @@ func _build_ui() -> void:
 		title_logo.scale = Vector2.ONE * (TITLE_W / title_logo.texture.get_width())
 		ui.add_child(title_logo)
 	lbl_msg = _label(54, Color.WHITE, 16)
-	_center(lbl_msg, Vector2(1060, 24), 1200)
+	_center(lbl_msg, Vector2(960, 24), 1200)
 	lbl_timer = _label(72, Color(1, 0.95, 0.4), 18)
 	_center(lbl_timer, Vector2(1560, 150), 500)
 	lbl_timer.visible = false
