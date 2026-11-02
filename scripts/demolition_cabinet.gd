@@ -1890,24 +1890,42 @@ func _explode() -> void:
 var _smokes: Array[Sprite2D] = []
 
 func _smoke_cover(dur: float) -> void:
+	# ビル全体をすき間なく覆う：雲を格子状（互い違い）に並べて、下の段から順にもくもく湧かせる
 	var s: float = chosen.scale.x
 	var w: float = chosen.size().x * s
 	var h: float = chosen.size().y * s
-	var n: int = 3 + int(h / 160.0)
-	for i in n:
-		var sm := Sprite2D.new()
-		sm.texture = _tex["dust-cloud"]
-		sm.position = Vector2(960 + randf_range(-w * 0.4, w * 0.4), GROUND_Y - h * (float(i) + 0.5) / n)
-		sm.scale = Vector2(0.1, 0.1)
-		sm.modulate.a = 0.0
-		sm.flip_h = randf() < 0.5
-		fx.add_child(sm)
-		_smokes.append(sm)
-		var tgt: float = clampf(w / 380.0, 0.7, 1.3) * randf_range(0.9, 1.2)
-		var tw := create_tween().set_parallel(true)
-		tw.tween_property(sm, "scale", Vector2(tgt, tgt), dur).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-		tw.tween_property(sm, "modulate:a", 0.92, dur * 0.5)
-		tw.tween_property(sm, "position:x", sm.position.x + randf_range(-40, 40), dur * 4.0)
+	var tex: Texture2D = _tex["dust-cloud"]
+	var cw: float = clampf(w * 0.8, 300.0, 560.0)          # 雲1つの表示幅
+	var sc: float = cw / tex.get_width()
+	var ch: float = tex.get_height() * sc
+	var left: float = CENTER_X - w / 2.0 - 40.0
+	var right: float = CENTER_X + w / 2.0 + 40.0
+	var top: float = GROUND_Y - h - 30.0
+	var bottom: float = GROUND_Y + 30.0
+	var step_x: float = cw * 0.55
+	var step_y: float = ch * 0.5
+	var cols: int = maxi(1, int(ceil((right - left) / step_x)))
+	var rows: int = maxi(1, int(ceil((bottom - top) / step_y)))
+	for r in rows:
+		var y: float = bottom - ch * 0.3 - r * step_y
+		var n: int = cols + (r % 2)
+		var span: float = step_x * (n - 1)
+		for c in n:
+			var sm := Sprite2D.new()
+			sm.texture = tex
+			sm.position = Vector2(CENTER_X - span / 2.0 + c * step_x + randf_range(-8, 8), y + randf_range(-6, 6))
+			sm.scale = Vector2(0.15, 0.15) * sc
+			sm.modulate.a = 0.0
+			sm.flip_h = (r + c) % 2 == 1
+			sm.z_index = 5
+			fx.add_child(sm)
+			_smokes.append(sm)
+			var tgt: float = sc * randf_range(1.0, 1.1)
+			var tw := create_tween().set_parallel(true)
+			tw.tween_interval(dur * 0.35 * float(r) / float(rows))
+			tw.chain().tween_property(sm, "scale", Vector2(tgt, tgt), dur * 0.7).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+			tw.parallel().tween_property(sm, "modulate:a", 1.0, dur * 0.3)
+			tw.parallel().tween_property(sm, "position:x", sm.position.x + randf_range(-12, 12), dur * 4.0)
 	await get_tree().create_timer(dur * 0.8).timeout
 
 
@@ -1953,8 +1971,8 @@ func _big(text: String, color: Color, key: String = "") -> void:
 	if key != "" and _text_img.has(key):
 		lbl_big.text = ""
 		big_img.texture = _text_img[key]
-		var h: float = {"boom": 420.0, "push": 320.0}.get(key, 300.0)
-		var cy: float = {"push": 30.0}.get(key, 110.0)   # 画面の上のほう、ボタンにかぶらない高さに
+		var h: float = {"boom": 420.0, "push": 360.0}.get(key, 300.0)
+		var cy: float = {"push": 20.0}.get(key, 110.0)   # 画面の上のほう、ボタンにかぶらない高さに
 		big_img.size = Vector2(h * big_img.texture.get_width() / big_img.texture.get_height(), h)
 		big_img.position = Vector2(900.0 - big_img.size.x / 2.0, cy - h / 2.0)
 		big_img.visible = true
