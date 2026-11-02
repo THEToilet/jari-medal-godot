@@ -9,6 +9,11 @@ var chain_h: float = 46.0     # 付け根から箱の上面までの高さ
 var attached: bool = true
 var crate: Node2D               # 吊っている箱（消えたらチェーンも外す）
 var _tex: Texture2D
+var _rope: Texture2D
+## crane_hook.png の中での位置（元画像のピクセル）
+const IMG_ROPE_X := 258.0      # ワイヤーの中心
+const IMG_SPREAD := 435.0      # 下端でのチェーン2本の間隔
+const ROPE_W := 60.0           # crane_rope.png の幅
 
 const OUT := Color(0.06, 0.04, 0.05)
 const YEL := Color(1.0, 0.78, 0.1)
@@ -16,8 +21,11 @@ const STEEL := Color(0.62, 0.64, 0.7)
 
 
 func _ready() -> void:
+	texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED   # ワイヤーを縦に繰り返す
 	if ResourceLoader.exists("res://assets/crane_hook.png"):
 		_tex = load("res://assets/crane_hook.png")
+	if ResourceLoader.exists("res://assets/crane_rope.png"):
+		_rope = load("res://assets/crane_rope.png")
 
 
 func _process(_d: float) -> void:
@@ -29,11 +37,17 @@ func _process(_d: float) -> void:
 func _draw() -> void:
 	var top: float = -global_position.y - 60.0   # 画面の上の外まで
 	if _tex:
-		var h: float = 190.0
-		var w: float = h * _tex.get_width() / _tex.get_height()
-		draw_line(Vector2(0, top), Vector2(0, -h * 0.9), OUT, 9.0)
-		draw_line(Vector2(0, top), Vector2(0, -h * 0.9), Color(0.25, 0.25, 0.3), 4.0)
-		draw_texture_rect(_tex, Rect2(-w / 2.0, -h, w, h), false)
+		# チェーンの下端が箱の上面の両端に来るように縮める
+		var k: float = chain_w / IMG_SPREAD
+		var img_h: float = _tex.get_height() * k
+		var img_top: float = chain_h - img_h
+		draw_set_transform(Vector2(0, img_top), 0.0, Vector2(k, k))
+		if _rope:
+			var rope_len: float = (img_top - top) / k + 4.0
+			draw_texture_rect(_rope, Rect2(-ROPE_W / 2.0, -rope_len, ROPE_W, rope_len), true)
+		draw_texture(_tex, Vector2(-IMG_ROPE_X, 0))
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		return
 	else:
 		# ワイヤー
 		draw_line(Vector2(0, top), Vector2(0, -120), OUT, 10.0)

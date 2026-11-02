@@ -862,7 +862,7 @@ func _crane_drop(d: RigidBody2D, to: Vector2, n: int, delay: float) -> void:
 	var top_off: Vector2 = Vector2(0, -RACK_H / 2.0 - HOOK_CHAIN_H)
 	d.position = start
 	var hook := CraneHook.new()
-	hook.chain_w = RACK_H * 0.7
+	hook.chain_w = RACK_H * 0.8
 	hook.chain_h = HOOK_CHAIN_H
 	hook.crate = d
 	hook.position = start + top_off
