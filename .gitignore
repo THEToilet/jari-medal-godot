@@ -1,0 +1,12 @@
+# Godot が自動生成するキャッシュ
+.godot/
+# PCごとに違う Godot の場所・ログ
+godot_path.txt
+godot_path.bad.txt
+*.log
+# バックアップ
+*.zip
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
