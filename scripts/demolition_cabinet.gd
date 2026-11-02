@@ -587,6 +587,7 @@ func _reset() -> void:
 	cable.visible = false
 	links.visible = false
 	cable_gen.power = 0.0
+	cable_gen.visible = false   # 選ぶ間は出さない（並べたダイナマイトにかぶるので）
 	_layout_gen_cable()
 	plunger.modulate = Color.WHITE
 	_set_push_frame(0)
