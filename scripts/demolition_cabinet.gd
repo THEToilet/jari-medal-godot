@@ -858,6 +858,9 @@ const CRATE_FUSES := [Vector2(0.26, 0.015), Vector2(0.54, 0.015), Vector2(0.76, 
 const CRATE_RIM_Y := 0.437
 const HOOK_CHAIN_H := 46.0     # フックから箱の上面までのチェーンの長さ
 const HOOK_DOWN := 0.42        # フックが降りてくる時間
+const FLY_TIME := 0.42         # 箱がビルの足元へ跳ぶ時間
+const FLY_GAP := 0.11          # 1個ずつ跳ぶ間隔
+const FLY_ARC := 170.0         # 跳ぶ高さ
 
 
 ## 山積みの i 番目の位置（下の段から左詰め）
@@ -971,6 +974,19 @@ func _crate_thud(d: Node2D, at: Vector2, n: int) -> void:
 			big_img.visible = false
 			big_img.modulate.a = 1.0
 			lbl_big.visible = false)
+
+
+## ビルの足元に跳んできた箱の着地（小さくドスッ）
+func _land_crate(f: Sprite2D, i: int) -> void:
+	f.rotation = 0.0
+	Sfx.play_pitch("thud", 1.25 + i * 0.03, -8.0)
+	_shake(3.0, 0.12)
+	var base: Vector2 = f.scale
+	var half: float = f.texture.get_height() / 2.0
+	var tw := f.create_tween()
+	tw.tween_method(func(v: float) -> void:
+		f.scale = Vector2(base.x * (2.0 - v), base.y * v)
+		f.offset.y = half * (1.0 / v - 1.0), 0.75, 1.0, 0.25).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
 
 
 ## 着地でグシャッと潰れて戻る（足元は固定）
@@ -1250,28 +1266,39 @@ func _zoom() -> void:
 	cable_gen.visible = true
 	meter.visible = false   # 電気ゲージは出さない
 	cable.visible = true
-	# 画面下のダイナマイトがビルの足元へ飛んでいき、そこで転がって積もる
-	var bw: float = chosen.size().x * s
-	var fly := create_tween().set_parallel(true)
+	# 画面下のダイナマイト箱が、1個ずつピョンと山なりに跳んでビルの足元へ積まれる
 	var flyers: Array[Sprite2D] = []
+	var bs: float = BASE_STICK_H / RACK_H
+	var last: Tween = null
 	for d in rack:
 		var f := Sprite2D.new()
 		var src: Sprite2D = d.get_child(0)
 		f.texture = src.texture
 		f.scale = src.scale
-		f.global_transform = d.global_transform
+		f.global_position = d.global_position
 		f.z_index = 3 if flyers.size() >= 3 else 4
 		add_child(f)
+		var i: int = flyers.size()
 		flyers.append(f)
-		var to: Vector2 = _crate_slot(flyers.size() - 1, BASE_STICK_H, Vector2(CENTER_X, GROUND_Y + 4))
-		var bs: float = BASE_STICK_H / RACK_H
-		fly.tween_property(f, "global_position", to, 0.35).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
-		fly.tween_property(f, "scale", src.scale * bs, 0.35)
+		var from: Vector2 = f.global_position
+		var to: Vector2 = _crate_slot(i, BASE_STICK_H, Vector2(CENTER_X, GROUND_Y + 4))
+		var sc0: Vector2 = src.scale
+		var sc1: Vector2 = src.scale * bs
+		var spin: float = deg_to_rad(randf_range(-14, 14))
+		var jt := f.create_tween()
+		jt.tween_interval(i * FLY_GAP)
+		jt.tween_method(func(u: float) -> void:
+			f.global_position = from.lerp(to, u) + Vector2(0, -FLY_ARC * 4.0 * u * (1.0 - u))
+			f.scale = sc0.lerp(sc1, u)
+			f.rotation = spin * sin(u * PI), 0.0, 1.0, FLY_TIME).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		jt.tween_callback(_land_crate.bind(f, i))
+		last = jt
 	for d in rack:
 		d.queue_free()
 	rack.clear()
-	if flyers.size() > 0:
-		await fly.finished
+	if last != null:
+		await last.finished
+		await get_tree().create_timer(0.25).timeout
 	for f in flyers:
 		var b: RigidBody2D = _make_stick(BASE_STICK_H, PIECE_LAYER)
 		b.freeze = true
