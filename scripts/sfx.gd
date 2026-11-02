@@ -24,7 +24,7 @@ var _hum_vol: float = 0.0
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	for k in ["boom", "rumble", "coin", "tap", "creak", "beep", "hum", "thud", "fanfare_0", "fanfare_1", "fanfare_2", "bgm"]:
+	for k in ["boom", "rumble", "coin", "tap", "creak", "beep", "hum", "thud", "crane", "chain", "fanfare_0", "fanfare_1", "fanfare_2", "bgm"]:
 		for ext in ["ogg", "wav"]:
 			var path: String = "res://assets/sfx/%s.%s" % [k, ext]
 			if ResourceLoader.exists(path):
@@ -81,6 +81,18 @@ func play(kind: String, freq: float = 440.0, dur: float = 0.15) -> void:
 	else:
 		p.pitch_scale = 1.0
 	p.volume_db = {"tap": -8.0, "coin": -6.0, "creak": -4.0, "beep": -10.0}.get(kind, 0.0)
+	p.play()
+
+
+## 高さと音量を指定して鳴らす（積むほど低く重くする、などに使う）
+func play_pitch(kind: String, pitch: float, vol_db: float = 0.0) -> void:
+	if not _files.has(kind):
+		return
+	var p: AudioStreamPlayer = _pool[_next]
+	_next = (_next + 1) % POOL
+	p.stream = _files[kind]
+	p.pitch_scale = clampf(pitch, 0.25, 4.0)
+	p.volume_db = vol_db
 	p.play()
 
 

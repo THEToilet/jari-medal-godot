@@ -48,6 +48,7 @@ const PLUNGER_X := 1570.0     # 起爆器の箱の中心（現場監督が右に
 const PLUNGER_Y := 1040.0
 const WORKER_POS := Vector2(300, 1075)   # 発電機を回す作業員（足元）
 const WORKER_SCALE := 1.3
+const WORKER_HEAD := Vector2(256, 655)     # 作業員の頭のあたり（汗を出す位置）
 const GEN_OUT := Vector2(0.80, 0.80)     # コマ画像内の発電機の出力位置（0〜1）
 const PLUNGER_SCALE := 1.22
 const PUSH_BOX := Vector2(55, 376)   # foreman_push 画像内の、起爆器の箱の下端中央（px）
@@ -119,6 +120,10 @@ const TITLE_W := 1100.0
 const TITLE_IDLE := 15.0
 var _title_boot: bool = true
 var _wait_t: float = 0.0
+var _fear: int = 0                # 積まれた箱の数（作業員のビビり具合）
+var sweat: SweatDrops
+var has_worker_scared: bool = false
+var _worker_scared_tex: Texture2D
 var rack: Array[RigidBody2D] = []        # ベットするごとに画面下に降ってくるダイナマイト（物理）
 var base_sticks: Array[RigidBody2D] = []  # ビルの足元に仕掛けたダイナマイト（物理）
 var marker: SelectMarker
@@ -285,6 +290,13 @@ func _build_world() -> void:
 
 	worker = _chara(WORKER_POS, WORKER_SCALE)
 	_worker_idle()
+	sweat = SweatDrops.new()
+	sweat.position = WORKER_HEAD
+	sweat.z_index = 8
+	add_child(sweat)
+	if ResourceLoader.exists("res://assets/chara/worker_crank_scared.png"):
+		_worker_scared_tex = load("res://assets/chara/worker_crank_scared.png")
+		has_worker_scared = true
 
 	dynamo = Dynamo.new()
 	dynamo.position = Vector2(380, 905)
@@ -571,6 +583,7 @@ func _reset() -> void:
 	fuse.visible = false
 	btn_hint.visible = false
 	_hide_mash_text()
+	_reset_fear()
 	lbl_big.visible = false
 	lbl_payout.visible = false
 	_build_strip()
@@ -877,9 +890,18 @@ func _crane_drop(d: RigidBody2D, to: Vector2, n: int, delay: float) -> void:
 	hook.position = start + top_off
 	hook.z_index = 6
 	add_child(hook)
+	# 着地点の影（箱が近づくほど濃く大きく）
+	var sh := DropShadow.new()
+	sh.position = Vector2(to.x, to.y + RACK_H * 0.48)
+	sh.w = RACK_H * 0.9
+	sh.k = 0.0
+	sh.z_index = 2
+	add_child(sh)
 	var tw := d.create_tween()
 	tw.tween_interval(delay)
+	tw.tween_callback(Sfx.play_pitch.bind("crane", randf_range(0.95, 1.05), -6.0))
 	tw.set_parallel(true)
+	tw.tween_property(sh, "k", 0.75, HOOK_DOWN)
 	tw.tween_property(d, "position", hang, HOOK_DOWN).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tw.tween_property(hook, "position", hang + top_off, HOOK_DOWN).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	# 吊られて少し揺れる
@@ -888,9 +910,15 @@ func _crane_drop(d: RigidBody2D, to: Vector2, n: int, delay: float) -> void:
 	tw.tween_property(d, "rotation", deg_to_rad(-2), 0.08)
 	tw.tween_property(d, "rotation", 0.0, 0.06)
 	# 外す → 落ちてドスン
-	tw.tween_callback(func() -> void: hook.attached = false)
+	tw.tween_callback(func() -> void:
+		hook.attached = false
+		Sfx.play_pitch("chain", randf_range(0.9, 1.1), -8.0))
+	tw.set_parallel(true)
 	tw.tween_property(d, "position", to, 0.1).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	tw.tween_callback(_crate_thud.bind(to, n))
+	tw.tween_property(sh, "k", 1.0, 0.1)
+	tw.set_parallel(false)
+	tw.tween_callback(_crate_thud.bind(d, to, n))
+	tw.tween_callback(sh.queue_free)
 	# フックは上へ戻って消える
 	var up := hook.create_tween()
 	up.tween_interval(delay + HOOK_DOWN + 0.18)
@@ -898,23 +926,28 @@ func _crane_drop(d: RigidBody2D, to: Vector2, n: int, delay: float) -> void:
 	up.tween_callback(hook.queue_free)
 
 
-func _crate_thud(at: Vector2, n: int) -> void:
+func _crate_thud(d: Node2D, at: Vector2, n: int) -> void:
 	if state != S.BET:
 		return
 	_shake(5.0 + n * 2.5, 0.22)
-	Sfx.play("thud")
+	# 積むほど低く重い音
+	Sfx.play_pitch("thud", 1.1 - n * 0.08, -2.0 + n * 1.0)
+	_squash(d)
+	_spark_burst(at + Vector2(0, -RACK_H * 0.45), n)
+	_react_to_crate(n)
 	# 土煙（左右にぽふっ）
 	for sx in [-1.0, 1.0]:
 		var sm := Sprite2D.new()
 		sm.texture = _tex["dust-cloud"]
 		sm.position = at + Vector2(sx * RACK_H * 0.45, RACK_H * 0.4)
 		sm.scale = Vector2(0.08, 0.08)
+		var big: float = 1.0 + 0.18 * (n - 1)   # 積むほど土煙も大きく
 		sm.flip_h = sx < 0.0
 		sm.z_index = 7
 		fx.add_child(sm)
 		var tw := sm.create_tween().set_parallel(true)
-		tw.tween_property(sm, "scale", Vector2(0.28, 0.2), 0.3).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-		tw.tween_property(sm, "position:x", sm.position.x + sx * 60.0, 0.4)
+		tw.tween_property(sm, "scale", Vector2(0.28, 0.2) * big, 0.3).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		tw.tween_property(sm, "position:x", sm.position.x + sx * 60.0 * big, 0.4)
 		tw.tween_property(sm, "modulate:a", 0.0, 0.45).set_delay(0.1)
 		tw.chain().tween_callback(sm.queue_free)
 	# 5個目（MAX）だけ特別：フラッシュ＋大きく揺れて「MAX!!」
@@ -932,12 +965,85 @@ func _crate_thud(at: Vector2, n: int) -> void:
 			lbl_big.visible = false)
 
 
+## 着地でグシャッと潰れて戻る（足元は固定）
+func _squash(d: Node2D) -> void:
+	if not is_instance_valid(d):
+		return
+	var spr: Sprite2D = d.get_child(0)
+	var base: Vector2 = spr.scale
+	var half: float = spr.texture.get_height() / 2.0
+	var tw := spr.create_tween()
+	tw.tween_method(func(v: float) -> void:
+		spr.scale = Vector2(base.x * (2.0 - v), base.y * v)
+		spr.offset.y = half * (1.0 / v - 1.0), 0.72, 1.0, 0.32).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+
+
+## 着地で導火線から火花がパッと散る（積むほど多く）
+func _spark_burst(at: Vector2, n: int) -> void:
+	var p := CPUParticles2D.new()
+	p.position = at
+	p.one_shot = true
+	p.explosiveness = 1.0
+	p.amount = 8 + n * 6
+	p.lifetime = 0.45
+	p.direction = Vector2.UP
+	p.spread = 70.0
+	p.initial_velocity_min = 180.0
+	p.initial_velocity_max = 380.0 + n * 40.0
+	p.gravity = Vector2(0, 900)
+	p.scale_amount_min = 4.0
+	p.scale_amount_max = 8.0
+	var g := Gradient.new()
+	g.set_color(0, Color(1, 1, 0.7))
+	g.set_color(1, Color(1, 0.45, 0.1, 0))
+	p.color_ramp = g
+	p.z_index = 8
+	fx.add_child(p)
+	p.emitting = true
+	get_tree().create_timer(1.0).timeout.connect(p.queue_free)
+
+
+## 積まれるたびのキャラの反応：監督はうれしそうに跳ね、作業員は数が増えるほどビビる
+func _react_to_crate(n: int) -> void:
+	var hop: float = 10.0 + n * 3.0 + (14.0 if n >= MAX_BET else 0.0)
+	var ft := plunger.create_tween()
+	ft.tween_property(plunger, "position:y", PLUNGER_Y - hop, 0.09).set_ease(Tween.EASE_OUT)
+	ft.tween_property(plunger, "position:y", PLUNGER_Y, 0.16).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+	_fear = n
+	sweat.level = n - 2        # 3個目から汗
+	# ビクッ
+	var wt := worker.create_tween()
+	wt.tween_property(worker, "position:x", WORKER_POS.x - 10.0 - n * 2.0, 0.05)
+	wt.tween_property(worker, "position:x", WORKER_POS.x, 0.12)
+	if has_worker_scared and n >= 3:
+		_set_worker_scared(true)
+
+
+## 作業員のビビり顔（assets/chara/worker_crank_scared.png があるときだけ）
+func _set_worker_scared(on: bool) -> void:
+	if on and _worker_scared_tex:
+		worker.texture = _worker_scared_tex
+		worker.offset = Vector2(-_worker_scared_tex.get_width() / 2.0, -_worker_scared_tex.get_height())
+	else:
+		_worker_idle()
+
+
+func _reset_fear() -> void:
+	_fear = 0
+	if sweat:
+		sweat.level = 0
+	_worker_idle()
+
+
 ## 積むほど危ない：山がガタガタ震える（BET中に毎フレーム）
 func _rack_jitter() -> void:
 	var amp: float = maxf(0.0, float(rack.size() - 1)) * 1.1
 	for d in rack:
 		var spr: Node2D = d.get_child(0)
 		spr.position = Vector2(randf_range(-amp, amp), randf_range(-amp * 0.4, amp * 0.4))
+	# 作業員のガクブル（4個目から）
+	var wa: float = maxf(0.0, float(_fear) - 3.0) * 1.5
+	worker.offset.x = -worker.texture.get_width() / 2.0 + randf_range(-wa, wa)
 
 
 ## ダイナマイト箱の山の i 番目の中心位置（下段3つ → 上段2つ）。base は山の足元中央
