@@ -1,12 +1,14 @@
 class_name ButtonHint
 extends Node2D
 ## 「ボタンを押せ」の合図アニメ。assets/button/press_0〜3.png のコマ送りで
-## ボタンがペコペコ押し込まれ、底まで押したコマで衝撃の輪が広がる。
+## 「離した」「押した」の2コマだけで切り替え、押した瞬間に衝撃の輪が広がる。
 ## 連打中も起爆待ちも同じアニメで、間隔と大きさだけ変える。原点は土台の下端中央。
 
 const FRAMES := 4
-## 1周の中で各コマに切り替わるタイミング（0〜1）。構え→半分→底→戻り
-const SWITCH := [0.0, 0.35, 0.5, 0.72]
+## 使うコマ（press_N の N）。離した→押した の2コマだけ
+const USE := [0, 2]
+## 1周の中で各コマに切り替わるタイミング（0〜1）
+const SWITCH := [0.0, 0.55]
 
 var tex: Texture2D               # 互換用（未使用）
 var interval: float = 0.14       # 1回押す間隔（秒）
@@ -37,7 +39,7 @@ func _process(delta: float) -> void:
 		return
 	_t += delta
 	var f: int = _frame_at(fmod(_t, interval) / interval)
-	if f == 2 and _last != 2:
+	if f == 1 and _last != 1:
 		_rings.append(0.0)       # 底まで押した瞬間
 	_last = f
 	var alive: Array[float] = []
@@ -51,7 +53,7 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	if _frames.is_empty():
 		return
-	var t: Texture2D = _frames[_frame_at(fmod(_t, interval) / interval)]
+	var t: Texture2D = _frames[mini(USE[_frame_at(fmod(_t, interval) / interval)], _frames.size() - 1)]
 	var w: float = size_px
 	var h: float = w * t.get_height() / t.get_width()
 	# 衝撃の輪（土台のまわりに広がる）
