@@ -3,6 +3,11 @@ extends Node2D
 ## ビルの足元に並べたダイナマイト同士をつなぐ短い発破線（山なり）。
 ## 起爆の瞬間は power で青白く光る。
 var anchors: PackedVector2Array = PackedVector2Array()   # つなぐ点（左から順）
+## 0→1 で左から順に線がつながっていく
+var reveal: float = 1.0:
+	set(v):
+		reveal = v
+		queue_redraw()
 var power: float = 0.0:
 	set(v):
 		power = v
@@ -19,18 +24,28 @@ func set_anchors(pts: PackedVector2Array) -> void:
 
 
 func _draw() -> void:
-	for i in anchors.size() - 1:
-		var a: Vector2 = anchors[i]
-		var b: Vector2 = anchors[i + 1]
+	var segs: int = anchors.size() - 1
+	# つなぐ順番は右（起爆器側）から左へ
+	for j in segs:
+		var i: int = segs - 1 - j
+		var part: float = clampf(reveal * segs - j, 0.0, 1.0)
+		if part <= 0.0:
+			continue
+		var a: Vector2 = anchors[i + 1]
+		var b: Vector2 = anchors[i]
 		var lift: float = 26.0 + a.distance_to(b) * 0.15
 		var pts := PackedVector2Array()
 		for k in 13:
-			var u: float = float(k) / 12.0
+			var u: float = float(k) / 12.0 * part
 			pts.append(a.lerp(b, u) + Vector2(0, -lift * 4.0 * u * (1.0 - u)))
 		if power > 0.05:
 			draw_polyline(pts, Color(GLOW, 0.35 * power), 26.0, true)
 		draw_polyline(pts, OUT, 11.0, true)
 		draw_polyline(pts, WIRE.lerp(GLOW, power * 0.8), 5.0, true)
-	for p in anchors:
+	for idx in anchors.size():
+		var shown: bool = idx == segs or reveal * segs >= float(segs - idx)
+		if not shown:
+			continue
+		var p: Vector2 = anchors[idx]
 		draw_circle(p, 8.0, OUT)
 		draw_circle(p, 4.5, Color(0.75, 0.77, 0.82))

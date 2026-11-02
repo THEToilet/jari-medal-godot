@@ -39,7 +39,7 @@ const STRIP_HALF := 4          # 中央から左右に何棟ぶん並べるか
 const ARROW_Y := 40.0            # ▼の高さ（固定）
 const CENTER_ZOOM := 0.22        # 中央でどれだけ大きくなるか（+35%）
 const CENTER_ZOOM_WIDTH := 0.9  # 大きくなる範囲（ビル間隔の何倍か。小さいほど中央だけで急に大きくなる）
-const NUM_H := {1: 48.0, 2: 52.0, 5: 58.0, 8: 62.0, 10: 68.0, 20: 78.0, 30: 90.0}
+const NUM_H := {1: 66.0, 2: 70.0, 5: 78.0, 8: 84.0, 10: 92.0, 20: 104.0, 30: 120.0}
 const ZOOM_MAX_H := 700.0
 const ZOOM_MAX_SCALE := 1.2
 const PIECE_LAYER := 2
@@ -769,7 +769,7 @@ func _spawn_building(x: float) -> void:
 		sb.shadow_size = 6
 		sb.shadow_offset = Vector2(4, 6)
 		plate.add_theme_stylebox_override("panel", sb)
-		var pad := Vector2(18, 10)
+		var pad := Vector2(22, 12)
 		plate.size = nr.size + pad * 2.0
 		nr.position = pad
 		plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -905,6 +905,7 @@ const HOOK_DOWN := 0.42        # フックが降りてくる時間
 const FLY_TIME := 0.42         # 箱がビルの足元へ跳ぶ時間
 const FLY_GAP := 0.11          # 1個ずつ跳ぶ間隔
 const FLY_ARC := 170.0         # 跳ぶ高さ
+const WIRE_RUN := 0.55         # 発破線が伸びる時間
 ## 入れ物の格上げ（メダル1枚目〜5枚目）。束 → 木箱 → 大きい木箱 → パレットの木枠 → コンテナ
 ## 絵は assets/pile/stage_<N>.png。無い段階は木箱の絵を大きさだけ変えて代用する
 const STAGE_H := [100.0, 145.0, 195.0, 250.0, 320.0]   # 画面下での表示の高さ
@@ -957,6 +958,26 @@ func _update_bet_label() -> void:
 		k += 1
 
 
+## 置いたダイナマイトへ、起爆器から線がスルスル伸びて「カチッ」と差さり、
+## そこからダイナマイト同士の線が右から左へ順につながっていく
+func _run_wire() -> void:
+	cable.grow = 0.0
+	cable.visible = true
+	links.reveal = 0.0
+	links.visible = true
+	var gt := create_tween()
+	gt.tween_property(cable, "grow", 1.0, WIRE_RUN).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	await gt.finished
+	Sfx.play_pitch("chain", 1.6, -6.0)
+	_spark_burst(cable.points[cable.points.size() - 1] if cable.points.size() > 0 else Vector2(CENTER_X, GROUND_Y), 0)
+	var segs: int = maxi(links.anchors.size() - 1, 0)
+	if segs > 0:
+		var lt := create_tween()
+		lt.tween_property(links, "reveal", 1.0, 0.12 * segs + 0.05)
+		await lt.finished
+	await get_tree().create_timer(0.2).timeout
+
+
 ## 起爆器からの発破線を、足元に並べたダイナマイトのいちばん右（いちばん大きい）につなぐ。
 ## ダイナマイト同士も短い線でつなぐ
 func _wire_pile(dest: Array[Vector2]) -> void:
@@ -979,7 +1000,8 @@ func _wire_pile(dest: Array[Vector2]) -> void:
 	anchors[anchors.size() - 1] = end
 	cable.set_ends(start, end, 1.0)
 	links.set_anchors(anchors)
-	links.visible = true
+	links.reveal = 0.0
+	links.visible = false   # 線が届いてから出す
 
 
 ## 並べた入れ物の中心位置。n 個を足元 base を中心に左から小さい順に並べる
@@ -1430,8 +1452,12 @@ func _zoom() -> void:
 	# スイッチ（起爆器）が下からせり上がる
 	_layout_gen_cable()
 	cable_gen.visible = true
+	# 発電機→起爆器の線は、寄ったあとにスルスルと伸びてくる
+	cable_gen.grow = 0.0
+	create_tween().tween_property(cable_gen, "grow", 1.0, 0.5).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	meter.visible = false   # 電気ゲージは出さない
-	cable.visible = true
+	# 起爆器→ダイナマイトの線は、ダイナマイトを置いてから伸ばす
+	cable.visible = false
 	# 並べた入れ物が、小さい順に1個ずつ山なりにピョンと跳んでビルの足元へ
 	var dest: Array[Vector2] = _pile_layout(rack.size(), BASE_RATIO, Vector2(CENTER_X, GROUND_Y + 4))
 	_wire_pile(dest)
@@ -1476,7 +1502,7 @@ func _zoom() -> void:
 		add_child(b)
 		base_sticks.append(b)
 		f.queue_free()
-	await get_tree().create_timer(0.1).timeout
+	await _run_wire()
 	debris.position = chosen.position + Vector2(0, -chosen.size().y * s / 2.0)
 	debris.emission_rect_extents = Vector2(chosen.size().x * s / 2.0, chosen.size().y * s / 2.0)
 	await get_tree().create_timer(0.3).timeout
@@ -1855,8 +1881,8 @@ func _big(text: String, color: Color, key: String = "") -> void:
 	if key != "" and _text_img.has(key):
 		lbl_big.text = ""
 		big_img.texture = _text_img[key]
-		var h: float = {"boom": 420.0, "push": 400.0}.get(key, 300.0)
-		var cy: float = {"push": 20.0}.get(key, 110.0)   # 2段の文字はボタンにかぶらない高さに
+		var h: float = {"boom": 420.0, "push": 530.0}.get(key, 300.0)
+		var cy: float = {"push": 75.0}.get(key, 110.0)   # 2段の文字はボタンにかぶらない高さに
 		big_img.size = Vector2(h * big_img.texture.get_width() / big_img.texture.get_height(), h)
 		big_img.position = Vector2(900.0 - big_img.size.x / 2.0, cy - h / 2.0)
 		big_img.visible = true

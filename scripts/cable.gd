@@ -19,6 +19,9 @@ var points: PackedVector2Array = PackedVector2Array()
 var power: float = 0.0
 var flow: float = 0.0
 var cut: float = 0.0
+## 0→1 で起爆器側から線が伸びていく（先端に金具が付いたまま進む）
+var grow: float = 1.0
+var _last_grow: float = -1.0
 var _phase: float = 0.0
 var _t: float = 0.0
 var _last_cut: float = -1.0
@@ -47,8 +50,9 @@ func _process(delta: float) -> void:
 	_t += delta
 	_phase = fmod(_phase + delta * (0.25 + flow * 0.09), 1.0)
 	# 電気が流れていない間は絵が変わらないので描き直さない（軽量化）
-	if visible and (power > 0.01 or cut != _last_cut or _dirty):
+	if visible and (power > 0.01 or cut != _last_cut or grow != _last_grow or _dirty):
 		_last_cut = cut
+		_last_grow = grow
 		_dirty = power > 0.01
 		queue_redraw()
 
@@ -65,6 +69,7 @@ func _draw() -> void:
 	var last: int = pts.size() - 1
 	_draw_clamp(pts[0], pts[1] - pts[0])
 	if cut <= 0.0:
+		# 伸びている途中も先端は金具（差し込む前のプラグ）
 		_draw_clamp(pts[last], pts[last - 1] - pts[last])
 	else:
 		_draw_frayed(pts[last], pts[last] - pts[last - 1])
@@ -72,9 +77,10 @@ func _draw() -> void:
 
 
 func _visible_points() -> PackedVector2Array:
-	if points.size() < 2 or cut <= 0.0:
+	var keep: float = minf(1.0 - cut, grow)
+	if points.size() < 2 or keep >= 1.0:
 		return points
-	var n: int = int(float(points.size()) * (1.0 - cut))
+	var n: int = int(float(points.size()) * keep)
 	return points.slice(0, maxi(n, 0))
 
 
