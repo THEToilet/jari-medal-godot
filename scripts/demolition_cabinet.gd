@@ -1131,7 +1131,7 @@ func _crate_thud(d: Node2D, at: Vector2, n: int) -> void:
 		_shake(22.0, 0.5)
 		flash.color = Color(1, 1, 0.9, 0.85)
 		create_tween().tween_property(flash, "color:a", 0.0, 0.35)
-		_big("MAX!!", Color(1, 0.85, 0.1), "max")
+		_big("フルパワー！", Color(1, 0.85, 0.1), "max")
 		var ft := create_tween()
 		ft.tween_interval(0.9)
 		ft.tween_property(big_img, "modulate:a", 0.0, 0.25)
