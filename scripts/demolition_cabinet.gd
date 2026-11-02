@@ -1885,6 +1885,7 @@ func _explode() -> void:
 	tw.tween_property(ex, "modulate:a", 0.0, 0.6)
 	tw.tween_callback(ex.queue_free)
 	_big("ドカーーン!!", Color(1, 0.85, 0.05), "boom")
+	_window_puffs()
 	# ヒットストップ
 	Engine.time_scale = 0.05
 	await get_tree().create_timer(0.09, true, false, true).timeout
@@ -1945,15 +1946,128 @@ func _smoke_clear(dur: float) -> void:
 
 
 func _collapse() -> void:
+	var sc: float = chosen.scale.x
+	var w: float = chosen.size().x * sc
+	var h: float = chosen.size().y * sc
+	var floors: int = clampi(int(h / 90.0), 2, 9)
+	var dur: float = clampf(0.6 + h / 900.0, 0.8, 1.6)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(str(chosen.data.file)) + 1
+	var lean: float = -1.0 if rng.randf() < 0.5 else 1.0
 	Sfx.play("boom", 0.0, 0.9)
 	Sfx.play("rumble", 0.0, 1.6)
-	_shake(18.0, 1.0)
-	var tw := create_tween()
-	tw.tween_property(chosen, "scale:y", chosen.scale.y * 0.85, 0.1)
-	await tw.finished
-	chosen.collapse(world, PIECE_LAYER)
-	await get_tree().create_timer(0.8).timeout
+	_shake(14.0, dur + 0.4)
+	# 煙を薄くして、中で沈んでいくビルが見えるように
+	for sm in _smokes:
+		sm.create_tween().tween_property(sm, "modulate:a", 0.18, 0.3)
+	chosen.rotation_degrees = 0.0
+	var im := chosen.implode(dur, lean, floors)
+	# 階が抜けるたびにドスン＋足元から土煙が横へ
+	for i in floors:
+		var at: float = dur * float(i) / floors
+		get_tree().create_timer(at).timeout.connect(func() -> void:
+			Sfx.play_pitch("thud", 0.7 + 0.05 * i, 0.0)
+			_ground_dust(w, 0.6 + 0.12 * i)
+			_rubble_chips(w, 3))
+	await im.finished
+	# 沈みきった瞬間：大きな土煙の波とがれきの山
+	_shake(24.0, 0.5)
+	Sfx.play("rumble", 0.0, 1.2)
+	_ground_dust(w, 1.1)
+	_rubble_pile(w)
+	await get_tree().create_timer(0.7).timeout
 	await _smoke_clear(0.8)
+
+
+## 足元から左右へ地面をはうように広がる土煙
+func _ground_dust(w: float, size_k: float) -> void:
+	for side in [-1.0, 1.0]:
+		var sm := Sprite2D.new()
+		sm.texture = _tex["dust-cloud"]
+		sm.position = Vector2(CENTER_X + side * w * 0.3, GROUND_Y - 30.0)
+		sm.scale = Vector2(0.15, 0.1)
+		sm.flip_h = side < 0.0
+		sm.z_index = 2   # キャラより奥
+		fx.add_child(sm)
+		var tgt := Vector2(0.42, 0.26) * size_k
+		var tw := sm.create_tween().set_parallel(true)
+		tw.tween_property(sm, "scale", tgt, 0.6).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		tw.tween_property(sm, "position:x", sm.position.x + side * (90.0 + 80.0 * size_k), 1.2).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		tw.tween_property(sm, "modulate:a", 0.0, 0.8).set_delay(0.6)
+		tw.chain().tween_callback(sm.queue_free)
+
+
+## 沈むところから壁のかけらが横へはじけ飛ぶ（物理は使わずアニメで）
+func _rubble_chips(w: float, n: int) -> void:
+	var t: Texture2D = chosen.tex
+	var sc: float = chosen.scale.x
+	for i in n:
+		var c := Sprite2D.new()
+		c.texture = t
+		c.region_enabled = true
+		var cw: float = randf_range(22, 40)
+		c.region_rect = Rect2(randf_range(0, t.get_width() - cw), randf_range(t.get_height() * 0.3, t.get_height() * 0.9), cw, cw * randf_range(0.6, 1.0))
+		c.scale = Vector2(sc, sc)
+		var side: float = -1.0 if randf() < 0.5 else 1.0
+		var from := Vector2(CENTER_X + side * w * randf_range(0.2, 0.45), GROUND_Y - randf_range(10, 40))
+		var to := from + Vector2(side * randf_range(80, 220), randf_range(10, 30))
+		var lift: float = randf_range(60, 160)
+		var spin: float = randf_range(-6, 6)
+		c.position = from
+		c.z_index = 7
+		fx.add_child(c)
+		var tw := c.create_tween()
+		tw.tween_method(func(u: float) -> void:
+			c.position = from.lerp(to, u) + Vector2(0, -lift * 4.0 * u * (1.0 - u))
+			c.rotation = spin * u, 0.0, 1.0, randf_range(0.45, 0.7))
+		tw.tween_property(c, "modulate:a", 0.0, 0.5).set_delay(0.6)
+		tw.tween_callback(c.queue_free)
+
+
+## 沈みきったあとに残るがれきの山
+func _rubble_pile(w: float) -> void:
+	var mound := RubbleMound.new()
+	mound.width = clampf(w * 1.15, 180.0, 520.0)
+	mound.height = clampf(w * 0.22, 40.0, 110.0)
+	mound.seed_v = hash(str(chosen.data.file))
+	# 建物の色に寄せる（絵の真ん中あたりの色）
+	var img: Image = chosen.tex.get_image()
+	if img.is_compressed():
+		img.decompress()
+	var c: Color = img.get_pixel(img.get_width() / 2, int(img.get_height() * 0.6))
+	mound.base_col = Color(0.6, 0.55, 0.5).lerp(Color(c, 1.0), 0.35)
+	mound.position = Vector2(CENTER_X, GROUND_Y + 8.0)
+	mound.z_index = 3
+	fx.add_child(mound)
+	var tw := mound.create_tween()
+	tw.tween_property(mound, "grow", 1.0, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_interval(2.8)
+	tw.tween_property(mound, "modulate:a", 0.0, 0.6)
+	tw.tween_callback(mound.queue_free)
+
+
+## 起爆の瞬間、各階の窓から一斉に「ボフッ」と煙が噴き出す（発破解体の名物）
+func _window_puffs() -> void:
+	var sc: float = chosen.scale.x
+	var w: float = chosen.size().x * sc
+	var h: float = chosen.size().y * sc
+	var floors: int = clampi(int(h / 90.0), 2, 9)
+	for i in floors:
+		var y: float = GROUND_Y - h * (float(i) + 0.5) / floors
+		for side in [-1.0, 1.0]:
+			var sm := Sprite2D.new()
+			sm.texture = _tex["dust-cloud"]
+			sm.position = Vector2(CENTER_X + side * w * 0.5, y)
+			sm.scale = Vector2(0.03, 0.03)
+			sm.flip_h = side < 0.0
+			sm.z_index = 6
+			fx.add_child(sm)
+			var k: float = clampf(w / 900.0, 0.12, 0.3)
+			var tw := sm.create_tween().set_parallel(true)
+			tw.tween_property(sm, "scale", Vector2(k, k * 0.8), 0.25).set_delay(i * 0.03).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+			tw.tween_property(sm, "position:x", sm.position.x + side * 70.0, 0.5).set_delay(i * 0.03)
+			tw.tween_property(sm, "modulate:a", 0.0, 0.6).set_delay(0.5)
+			tw.chain().tween_callback(sm.queue_free)
 
 
 func _hop(s: Sprite2D) -> void:

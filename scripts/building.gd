@@ -64,6 +64,35 @@ func tilt(deg: float, dur: float) -> Tween:
 	return tw
 
 
+## 発破解体：下の階から順にガクッ、ガクッと抜けて、ビル全体が足元へ沈み込んでいく。
+## 地面より下は描かない（絵の下側を切り取っていく）。lean は沈みながら傾く向き（-1 か 1）。
+## 戻り値の Tween が終わったら、ビルは完全に消えている。
+func implode(dur: float, lean: float, floors: int) -> Tween:
+	var sz: Vector2 = size()
+	sprite.region_enabled = true
+	sprite.region_rect = Rect2(Vector2.ZERO, sz)
+	cracks.visible = false
+	_shake_amp = 0.0
+	sprite.position = Vector2.ZERO
+	var tw := create_tween()
+	tw.tween_method(func(u: float) -> void:
+		# 階ごとにガクッ（段の頭で速く落ちて少し止まる）
+		var f: float = u * floors
+		var step: float = floorf(f)
+		var fr: float = f - step
+		var k: float = (step + minf(1.0, fr * 1.8)) / floors
+		k = clampf(k, 0.0, 1.0)
+		var d: float = sz.y * k
+		sprite.region_rect = Rect2(0, 0, sz.x, maxf(sz.y - d, 0.0))
+		sprite.offset = Vector2(-sz.x / 2.0, -(sz.y - d))
+		# 沈みながら上のほうが少しずつ傾き、ぶるぶる震える
+		rotation_degrees = lean * 9.0 * sin(minf(u * 1.3, 1.0) * PI * 0.5)
+		sprite.position = Vector2(randf_range(-3, 3), 0) * (1.0 - u)
+		, 0.0, 1.0, dur).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.tween_callback(func() -> void: sprite.visible = false)
+	return tw
+
+
 ## 崩壊：絵をブロックに切り分けて RigidBody2D としてばらまく
 func collapse(parent: Node, ground_layer: int) -> void:
 	var img: Image = tex.get_image()
