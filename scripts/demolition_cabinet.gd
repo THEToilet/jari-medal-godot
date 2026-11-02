@@ -866,8 +866,14 @@ const FLY_ARC := 170.0         # 跳ぶ高さ
 const STAGE_H := [95.0, 135.0, 175.0, 215.0, 260.0]   # 画面下での表示の高さ
 const BASE_RATIO := 0.72                              # ビルの足元に置くときの縮み具合
 ## 絵ごとの位置（0〜1）：チェーンをかける高さ、導火線の先。絵が届いたら合わせる
-const STAGE_RIM := {2: 0.437}
-const STAGE_FUSES := {2: [Vector2(0.26, 0.015), Vector2(0.54, 0.015), Vector2(0.76, 0.041), Vector2(0.12, 0.088), Vector2(0.92, 0.143), Vector2(0.54, 0.12), Vector2(0.07, 0.21)]}
+const STAGE_RIM := {1: 0.35, 2: 0.437, 3: 0.46, 4: 0.47, 5: 0.26}
+const STAGE_FUSES := {
+	1: [Vector2(0.5, 0.02), Vector2(0.24, 0.12), Vector2(0.76, 0.12)],
+	2: [Vector2(0.26, 0.015), Vector2(0.54, 0.015), Vector2(0.76, 0.041), Vector2(0.12, 0.088), Vector2(0.92, 0.143), Vector2(0.54, 0.12), Vector2(0.07, 0.21)],
+	3: [Vector2(0.2, 0.07), Vector2(0.38, 0.03), Vector2(0.5, 0.13), Vector2(0.67, 0.03), Vector2(0.84, 0.14), Vector2(0.07, 0.31)],
+	4: [Vector2(0.27, 0.12), Vector2(0.55, 0.02), Vector2(0.73, 0.17), Vector2(0.42, 0.3), Vector2(0.12, 0.36)],
+	5: [Vector2(0.45, 0.38), Vector2(0.52, 0.6), Vector2(0.3, 0.93), Vector2(0.75, 0.93)],
+}
 var _pile_stage: int = 0
 var _old_piles: Array[Node2D] = []
 
@@ -906,7 +912,8 @@ func _crane_drop(d: RigidBody2D, to: Vector2, n: int, delay: float) -> void:
 	var hang: Vector2 = to + Vector2(0, -34)          # 外す直前の高さ
 	var start: Vector2 = to + Vector2(0, -820)
 	# チェーンは入れ物のふちの両端にかける
-	var top_off: Vector2 = Vector2(0, -h / 2.0 + h * float(STAGE_RIM.get(n, 0.2)) - HOOK_CHAIN_H)
+	var rim: float = STAGE_RIM[2] if ct == _tex["dynamite_crate"] else float(STAGE_RIM.get(n, 0.2))
+	var top_off: Vector2 = Vector2(0, -h / 2.0 + h * rim - HOOK_CHAIN_H)
 	d.position = start
 	var hook := CraneHook.new()
 	hook.chain_w = h * ct.get_width() / ct.get_height() * 0.92
@@ -1166,7 +1173,7 @@ func _make_container(n: int, h: float, layer: int) -> RigidBody2D:
 	cs.shape = rs
 	cs.position = Vector2(0, t.get_height() * 0.03 * sc)
 	body.add_child(cs)
-	var fuses: Array = STAGE_FUSES.get(n, STAGE_FUSES[2] if t == _tex["dynamite_crate"] else [])
+	var fuses: Array = STAGE_FUSES[2] if t == _tex["dynamite_crate"] else STAGE_FUSES.get(n, [])
 	for tip in fuses:
 		var sp := FuseSpark.new()
 		sp.position = Vector2((tip.x - 0.5) * t.get_width(), (tip.y - 0.5) * t.get_height()) * sc
