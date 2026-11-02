@@ -1131,6 +1131,7 @@ func _crate_thud(d: Node2D, at: Vector2, n: int) -> void:
 		tw.chain().tween_callback(sm.queue_free)
 	# 5個目（MAX）だけ特別：フラッシュ＋大きく揺れて「MAX!!」
 	if n >= MAX_BET:
+		Sfx.play_pitch("fullpower", 1.0, 0.0)
 		_shake(22.0, 0.5)
 		flash.color = Color(1, 1, 0.9, 0.85)
 		create_tween().tween_property(flash, "color:a", 0.0, 0.35)
@@ -1695,7 +1696,7 @@ func _detonate() -> void:
 	_enter(S.RESULT)
 	# 押したボタンはしっかり押し込んで見せてから消す
 	btn_hint.slam()
-	Sfx.play("tap", 0.0, 0.05)
+	Sfx.play_pitch("press", 1.0, 2.0)
 	_shake(6.0, 0.15)
 	var bt := btn_hint.create_tween()
 	bt.tween_property(btn_hint, "scale", Vector2(1.06, 0.94), 0.06)

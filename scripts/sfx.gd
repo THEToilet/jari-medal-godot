@@ -24,7 +24,7 @@ var _hum_vol: float = 0.0
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	for k in ["boom", "rumble", "coin", "tap", "creak", "beep", "hum", "thud", "crane", "chain", "chargeup", "fanfare_0", "fanfare_1", "fanfare_2", "bgm"]:
+	for k in ["boom", "rumble", "coin", "tap", "creak", "beep", "hum", "thud", "crane", "chain", "chargeup", "fullpower", "press", "fanfare_0", "fanfare_1", "fanfare_2", "bgm"]:
 		for ext in ["ogg", "wav"]:
 			var path: String = "res://assets/sfx/%s.%s" % [k, ext]
 			if ResourceLoader.exists(path):
