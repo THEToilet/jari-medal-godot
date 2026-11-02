@@ -39,6 +39,9 @@ jobs:
           mkdir -p build/web
           ./godot --headless --path . --import || true
           ./godot --headless --path . --export-release "Web" build/web/index.html
+          # スマホのブラウザが古いゲームデータ（index.pck）を使い続けないよう、毎回URLを変える
+          sed -i "s/\"executable\":\"index\"/\"executable\":\"index\",\"mainPack\":\"index.pck?v=${GITHUB_SHA::8}\"/" build/web/index.html
+          grep -o '"mainPack":"[^"]*"' build/web/index.html
           ls -la build/web
 
       - uses: actions/upload-pages-artifact@v3
