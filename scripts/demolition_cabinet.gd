@@ -137,6 +137,7 @@ var _arrow_push: float = 0.0
 var _bet_idle: float = 0.0
 var select_hint: Control
 var _preloaded: Array[Resource] = []
+var _burst: CPUParticles2D
 var _fps_acc: float = 0.0
 var _fear: int = 0                # 積まれた箱の数（作業員のビビり具合）
 var sweat: SweatDrops
@@ -316,6 +317,8 @@ func _build_world() -> void:
 	for pre in ["res://assets/crane_hook.png", "res://assets/crane_rope.png"]:
 		if ResourceLoader.exists(pre):
 			_preloaded.append(load(pre))
+	for st in range(1, 6):
+		_stage_tex(st)   # 入れ物の絵も先に読み込む
 	sweat = SweatDrops.new()
 	sweat.position = WORKER_HEAD
 	sweat.z_index = 8
@@ -1211,28 +1214,30 @@ func _squash(d: Node2D) -> void:
 
 ## 着地で導火線から火花がパッと散る（積むほど多く）
 func _spark_burst(at: Vector2, n: int) -> void:
-	var p := CPUParticles2D.new()
-	p.position = at
-	p.one_shot = true
-	p.explosiveness = 1.0
-	p.amount = 8 + n * 6
-	p.lifetime = 0.45
-	p.direction = Vector2.UP
-	p.spread = 70.0
-	p.initial_velocity_min = 180.0
-	p.initial_velocity_max = 380.0 + n * 40.0
-	p.gravity = Vector2(0, 900)
-	p.scale_amount_min = 4.0
-	p.scale_amount_max = 8.0
-	# 火花ではなく土ぼこりと木くず（まだ火はついていない）
-	var g := Gradient.new()
-	g.set_color(0, Color(0.85, 0.72, 0.5))
-	g.set_color(1, Color(0.55, 0.42, 0.3, 0))
-	p.color_ramp = g
-	p.z_index = 8
-	fx.add_child(p)
-	p.emitting = true
-	get_tree().create_timer(1.0).timeout.connect(p.queue_free)
+	# 粒子の部品は1つだけ作って使い回す（毎回作ると重い）
+	if _burst == null:
+		_burst = CPUParticles2D.new()
+		_burst.one_shot = true
+		_burst.explosiveness = 1.0
+		_burst.amount = 30
+		_burst.lifetime = 0.45
+		_burst.direction = Vector2.UP
+		_burst.spread = 70.0
+		_burst.initial_velocity_min = 180.0
+		_burst.gravity = Vector2(0, 900)
+		_burst.scale_amount_min = 4.0
+		_burst.scale_amount_max = 8.0
+		# 火花ではなく土ぼこりと木くず（まだ火はついていない）
+		var g := Gradient.new()
+		g.set_color(0, Color(0.85, 0.72, 0.5))
+		g.set_color(1, Color(0.55, 0.42, 0.3, 0))
+		_burst.color_ramp = g
+		_burst.z_index = 8
+		_burst.emitting = false
+		fx.add_child(_burst)
+	_burst.position = at
+	_burst.initial_velocity_max = 380.0 + n * 40.0
+	_burst.restart()
 
 
 ## 積まれるたびのキャラの反応：監督はうれしそうに跳ね、作業員は数が増えるほどビビる

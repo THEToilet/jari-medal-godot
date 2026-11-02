@@ -24,26 +24,30 @@ func set_anchors(pts: PackedVector2Array) -> void:
 
 
 func _draw() -> void:
-	var segs: int = anchors.size() - 1
-	# つなぐ順番は右（起爆器側）から左へ
-	for j in segs:
-		var i: int = segs - 1 - j
-		var part: float = clampf(reveal * segs - j, 0.0, 1.0)
+	# 全部の弧の線分を集めて、色ごとに1回ずつ描く（軽量化）
+	var segs := PackedVector2Array()
+	var segs_n: int = anchors.size() - 1
+	for j in segs_n:
+		var i: int = segs_n - 1 - j
+		var part: float = clampf(reveal * segs_n - j, 0.0, 1.0)
 		if part <= 0.0:
 			continue
 		var a: Vector2 = anchors[i + 1]
 		var b: Vector2 = anchors[i]
 		var lift: float = 26.0 + a.distance_to(b) * 0.15
-		var pts := PackedVector2Array()
-		for k in 13:
+		var prev: Vector2 = a
+		for k in range(1, 13):
 			var u: float = float(k) / 12.0 * part
-			pts.append(a.lerp(b, u) + Vector2(0, -lift * 4.0 * u * (1.0 - u)))
+			var q: Vector2 = a.lerp(b, u) + Vector2(0, -lift * 4.0 * u * (1.0 - u))
+			segs.append(prev); segs.append(q)
+			prev = q
+	if segs.size() > 0:
 		if power > 0.05:
-			draw_polyline(pts, Color(GLOW, 0.35 * power), 26.0, true)
-		draw_polyline(pts, OUT, 11.0, true)
-		draw_polyline(pts, WIRE.lerp(GLOW, power * 0.8), 5.0, true)
+			draw_multiline(segs, Color(GLOW, 0.35 * power), 26.0)
+		draw_multiline(segs, OUT, 11.0)
+		draw_multiline(segs, WIRE.lerp(GLOW, power * 0.8), 5.0)
 	for idx in anchors.size():
-		var shown: bool = idx == segs or reveal * segs >= float(segs - idx)
+		var shown: bool = idx == segs_n or reveal * segs_n >= float(segs_n - idx)
 		if not shown:
 			continue
 		var p: Vector2 = anchors[idx]
