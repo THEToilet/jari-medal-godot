@@ -893,7 +893,7 @@ func _crate_thud(at: Vector2, n: int) -> void:
 	if state != S.BET:
 		return
 	_shake(5.0 + n * 2.5, 0.22)
-	Sfx.play("rumble", 70.0, 0.15)
+	Sfx.play("thud")
 	# 土煙（左右にぽふっ）
 	for sx in [-1.0, 1.0]:
 		var sm := Sprite2D.new()
