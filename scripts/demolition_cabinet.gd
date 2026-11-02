@@ -121,6 +121,11 @@ const TITLE_IDLE := 15.0
 var _title_boot: bool = true
 var _wait_t: float = 0.0
 var _medals_txt: String = ""
+## メダルを入れたのに選ばないまましばらく経ったら、選び方の案内を出す
+const SELECT_HINT_AFTER := 6.0
+const SELECT_HINT_Y := 150.0
+var _bet_idle: float = 0.0
+var select_hint: Control
 var _preloaded: Array[Resource] = []
 var _fps_acc: float = 0.0
 var _fear: int = 0                # 積まれた箱の数（作業員のビビり具合）
@@ -480,6 +485,7 @@ func _build_ui() -> void:
 	insert_sign.position = Vector2(960, 945)
 	insert_sign.setup(font)
 	ui.add_child(insert_sign)
+	_build_select_hint()
 	if ResourceLoader.exists("res://assets/title_logo.png"):
 		title_logo = Sprite2D.new()
 		title_logo.texture = load("res://assets/title_logo.png")
@@ -604,6 +610,35 @@ func _reset() -> void:
 		if state != S.WAIT:
 			return
 	_say_wait()
+
+
+## 選び方の案内（assets/text/select.png があれば画像、無ければ文字）
+func _build_select_hint() -> void:
+	var tp: String = "res://assets/text/select.png"
+	if ResourceLoader.exists(tp):
+		var r := TextureRect.new()
+		r.texture = load(tp)
+		r.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		var h: float = 150.0
+		r.size = Vector2(h * r.texture.get_width() / r.texture.get_height(), h)
+		select_hint = r
+	else:
+		var l := Label.new()
+		l.text = "ボタンで ビルを えらんでね！"
+		l.add_theme_font_size_override("font_size", 64)
+		l.add_theme_color_override("font_color", Color(1, 0.92, 0.2))
+		l.add_theme_color_override("font_outline_color", Color(0.08, 0.05, 0.05))
+		l.add_theme_constant_override("outline_size", 22)
+		if font:
+			l.add_theme_font_override("font", font)
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		l.size = Vector2(1100, 90)
+		select_hint = l
+	select_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	select_hint.position = Vector2(960 - select_hint.size.x / 2.0, SELECT_HINT_Y)
+	select_hint.pivot_offset = select_hint.size / 2.0
+	select_hint.visible = false
+	ui.add_child(select_hint)
 
 
 ## スマホ・ブラウザ用：画面にメダル投入ボタンを出す（筐体では出さない）
@@ -1288,6 +1323,7 @@ func _tap_held() -> bool:
 func _insert() -> void:
 	if state != S.WAIT and state != S.BET:
 		return
+	_bet_idle = 0.0
 	if bet >= MAX_BET:
 		Sfx.play("beep", 300.0, 0.15)
 		return
@@ -1468,6 +1504,18 @@ func _process(delta: float) -> void:
 		cam.offset = Vector2(randf_range(-1, 1), randf_range(-1, 1)) * _shake_amt
 	else:
 		cam.offset = Vector2.ZERO
+	if state == S.BET:
+		_bet_idle += delta
+	else:
+		_bet_idle = 0.0
+	if select_hint:
+		var show_hint: bool = state == S.BET and _bet_idle > SELECT_HINT_AFTER
+		if show_hint and not select_hint.visible:
+			select_hint.scale = Vector2(0.4, 0.4)
+			create_tween().tween_property(select_hint, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		select_hint.visible = show_hint
+		if show_hint:
+			select_hint.rotation = deg_to_rad(sin(_bet_idle * 3.0) * 2.0)
 	if state == S.WAIT or state == S.BET:
 		_scroll(delta)
 		marker.visible = false
