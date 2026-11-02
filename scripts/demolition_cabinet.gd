@@ -125,13 +125,13 @@ var title_logo: Sprite2D
 const TITLE_POS := Vector2(960, 370)
 const TITLE_W := 1100.0
 ## タイトルは起動直後と、待機のまましばらく放置されたときだけ出す
-const TITLE_IDLE := 15.0
+const TITLE_IDLE := 0.0
 var _title_boot: bool = true
 var _wait_t: float = 0.0
 var _medals_txt: String = ""
 var debug_pattern: String = ""   # テスト用：煽りパターンを固定
 ## デモ（アトラクト）：待機のまま DEMO_AFTER 秒たったら、自動で1プレイ見せる
-const DEMO_AFTER := 30.0
+const DEMO_AFTER := 12.0
 var demo: bool = false
 var demo_label: Label
 var _result_lock: bool = false   # リザルト表示中はメダルを受け付けない
