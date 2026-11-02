@@ -5,7 +5,7 @@ config_version=5
 
 config/name="じゃりメダル ビル解体"
 run/main_scene="res://scenes/main.tscn"
-run/main_scene.web="res://virtual/virtual_cabinet.tscn"
+run/main_scene.virtual_cabinet="res://virtual/virtual_cabinet.tscn"
 config/features=PackedStringArray("4.6", "GL Compatibility")
 config/icon="res://icon.png"
 boot_splash/image="res://assets/splash.png"

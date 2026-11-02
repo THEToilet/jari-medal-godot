@@ -43,11 +43,11 @@ func _ready() -> void:
 	_coin_slot = cabinet.find_child("CoinSlot", true, false)
 	_pocket = cabinet.find_child("PayoutPocket", true, false)
 
-	# 画面にゲームを映す
+	# 画面にゲームを映す（ブラウン管風のシェーダー越し）
 	var screen: MeshInstance3D = cabinet.find_child("Screen", true, false)
-	var sm := StandardMaterial3D.new()
-	sm.albedo_texture = game_viewport.get_texture()
-	sm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	var sm := ShaderMaterial.new()
+	sm.shader = preload("res://virtual/crt_screen.gdshader")   # ブラウン管風（強さはシェーダーの uniform で調整）
+	sm.set_shader_parameter("screen_tex", game_viewport.get_texture())
 	screen.material_override = sm
 
 	# ポップのロゴ

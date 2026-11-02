@@ -7,7 +7,10 @@ main ブランチに push すると、GitHub Actions が Web 版を書き出し�
 スマホでは右上の「メダル投入」ボタンでメダルを入れ、画面タップがボタンの代わり。メダルが尽きたら投入ボタンで自動補充される。
 
 ## 仮想筐体（3D）
-`virtual/virtual_cabinet.tscn` は、ゲーム（`scenes/main.tscn`）を3Dの筐体の画面に映して遊ぶシーン。Web版（GitHub Pages）はこちらが起動する（`project.godot` の `run/main_scene.web`）。PCの `play.bat` や実機は今までどおり2Dのまま。
+`virtual/virtual_cabinet.tscn` は、ゲーム（`scenes/main.tscn`）を3Dの筐体の画面に映して遊ぶシーン。GitHub Pages では `/virtual/` に置く（ルートは今までどおり2D）。書き出し設定「Web Virtual」（カスタム機能 `virtual_cabinet` → `run/main_scene.virtual_cabinet`）で書き出す。PCの `play.bat` や実機は2Dのまま。
+
+- Pages：`pages.yml` が main の2Dをルートに、`feature/virtual-cabinet` ブランチ（無ければ main）の仮想筐体を `/virtual/` に書き出す。ブランチに push したときは `preview-trigger.yml` が main の公開を動かす
+- 画面はブラウン管風のシェーダー（`virtual/crt_screen.gdshader`：ふくらみ・走査線・RGBの縦じま・色ずれ・にじみ・周辺減光）。強さは uniform で調整
 
 - ゲームは SubViewport の中で動かしていて、筐体のボタン → `tap`、投入口 → `coin` を流し込むだけ。ゲーム側には `is_in_play()` を足したのと、筐体の画面の中ではスマホ用の投入ボタンを出さないようにした以外、手を入れていない
 - ゲームの `finished(払い出し枚数)` を受けて、払い出し口のくぼみにメダルを物理で落とす
