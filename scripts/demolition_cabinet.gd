@@ -1818,9 +1818,10 @@ func _big(text: String, color: Color, key: String = "") -> void:
 	if key != "" and _text_img.has(key):
 		lbl_big.text = ""
 		big_img.texture = _text_img[key]
-		var h: float = 420.0 if key == "boom" else 300.0
+		var h: float = {"boom": 420.0, "push": 400.0}.get(key, 300.0)
+		var cy: float = {"push": 20.0}.get(key, 110.0)   # 2段の文字はボタンにかぶらない高さに
 		big_img.size = Vector2(h * big_img.texture.get_width() / big_img.texture.get_height(), h)
-		big_img.position = Vector2(900.0 - big_img.size.x / 2.0, 110.0 - h / 2.0)
+		big_img.position = Vector2(900.0 - big_img.size.x / 2.0, cy - h / 2.0)
 		big_img.visible = true
 	else:
 		lbl_big.text = text
