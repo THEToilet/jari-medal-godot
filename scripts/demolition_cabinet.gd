@@ -976,7 +976,7 @@ static func pile_pos(i: int, step: float, row_h: float) -> Vector2:
 
 
 func _update_bet_label() -> void:
-	lbl_credit.text = "CREDIT %d" % bet
+	lbl_credit.text = "CREDIT %d" % (0 if demo else bet)   # デモ中は本物のメダルは入っていない
 	# メダル1枚ごとに、クレーンが一回り大きい入れ物を吊ってきて横に並べる（束 → … → コンテナ）
 	if bet < _pile_stage:
 		_clear_sticks()
