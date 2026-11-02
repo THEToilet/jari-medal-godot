@@ -48,7 +48,7 @@ const PLUNGER_X := 1570.0     # 起爆器の箱の中心（現場監督が右に
 const PLUNGER_Y := 1040.0
 const WORKER_POS := Vector2(300, 1075)   # 発電機を回す作業員（足元）
 const WORKER_SCALE := 1.3
-const WORKER_HEAD := Vector2(256, 655)     # 作業員の頭のあたり（汗を出す位置）
+const WORKER_HEAD := Vector2(262, 625)     # 作業員の頭のあたり（汗を出す位置）
 const GEN_OUT := Vector2(0.80, 0.80)     # コマ画像内の発電機の出力位置（0〜1）
 const PLUNGER_SCALE := 1.22
 const PUSH_BOX := Vector2(55, 376)   # foreman_push 画像内の、起爆器の箱の下端中央（px）
@@ -371,7 +371,8 @@ func _set_worker_frame(i: int) -> void:
 func _layout_gen_cable() -> void:
 	if worker.texture == null:
 		return
-	var t: Texture2D = worker.texture
+	# ビビり顔の絵はサイズが違うので、位置はクランクの1コマ目で計算する
+	var t: Texture2D = _crank_frames[0] if not _crank_frames.is_empty() else worker.texture
 	var sz: Vector2 = t.get_size() * WORKER_SCALE
 	var out := WORKER_POS + Vector2(-sz.x / 2.0 + sz.x * GEN_OUT.x, -sz.y + sz.y * GEN_OUT.y)
 	cable_gen.set_ends(out, Vector2(PLUNGER_X - 55, PLUNGER_Y - 50))
