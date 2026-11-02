@@ -615,6 +615,7 @@ func _reset() -> void:
 	debris.emitting = false
 	bomb_marks.count = 0
 	_clear_sticks()
+	_show_pile_ghosts(true)
 	_crowd = 0.1
 	_pose(foreman, "chara/foreman_0")
 	_worker_idle()
@@ -928,9 +929,11 @@ const BTN_Y := 860.0           # 連打・起爆ボタンの位置（土台の�
 const WIRE_RUN := 0.35         # 発破線が伸びる時間
 ## 入れ物の格上げ（メダル1枚目〜5枚目）。束 → 木箱 → 大きい木箱 → パレットの木枠 → コンテナ
 ## 絵は assets/pile/stage_<N>.png。無い段階は木箱の絵を大きさだけ変えて代用する
-const STAGE_H := [100.0, 145.0, 195.0, 250.0, 320.0]   # 画面下での表示の高さ
+const STAGE_H := [95.0, 130.0, 165.0, 205.0, 255.0]   # 画面下での表示の高さ
 const BASE_RATIO := 0.62                              # ビルの足元に置くときの縮み具合
-const PILE_GAP := -28.0                               # 並べるときのすき間（マイナスで少し重ねる）
+## ピラミッドの各段の足元の位置（山の足元中央からのずれ。x は横、y はマイナスほど高い）
+const GHOST_COLOR := Color(0.1, 0.08, 0.1, 0.22)       # 置き場所の影の色
+const PILE_SLOTS := [Vector2(-120, 0), Vector2(115, 0), Vector2(-95, -55), Vector2(105, -55), Vector2(0, -105)]
 ## 絵ごとの位置（0〜1）：チェーンをかける高さ、導火線の先。絵が届いたら合わせる
 const STAGE_RIM := {1: 0.35, 2: 0.437, 3: 0.46, 4: 0.47, 5: 0.26}
 const STAGE_FUSES := {
@@ -941,6 +944,7 @@ const STAGE_FUSES := {
 	5: [Vector2(0.45, 0.38), Vector2(0.52, 0.6), Vector2(0.3, 0.93), Vector2(0.75, 0.93)],
 }
 var _pile_stage: int = 0
+var pile_ghosts: Array[Sprite2D] = []   # 置き場所の薄い影（何個まで置けるかを見せる）
 var _old_piles: Array[Node2D] = []
 
 
@@ -964,16 +968,10 @@ func _update_bet_label() -> void:
 		d.set_meta("stage", n)
 		add_child(d)
 		rack.append(d)
-		# 並びを真ん中に寄せ直す（すでに置いてある分はスッと横へ）
 		var pos: Array[Vector2] = _pile_layout(rack.size(), 1.0, Vector2(CENTER_X, RACK_Y))
-		for i in rack.size() - 1:
-			var o: Node2D = rack[i]
-			var mv := o.create_tween().set_parallel(true).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-			mv.tween_property(o, "position:x", pos[i].x, 0.25)
-			# まだ吊られている途中ならフックと影も一緒に
-			for key in ["hook", "shadow"]:
-				if o.has_meta(key):
-					mv.tween_property(o.get_meta(key), "position:x", pos[i].x, 0.25)
+		d.z_index = _pile_z(n - 1)
+		if n - 1 < pile_ghosts.size():
+			pile_ghosts[n - 1].visible = false   # 影のところに本物が入る
 		_crane_drop(d, pos[rack.size() - 1], n, k * 0.08)
 		k += 1
 
@@ -1006,40 +1004,41 @@ func _wire_pile(dest: Array[Vector2]) -> void:
 		cable.set_ends(start, Vector2(CENTER_X, GROUND_Y - 10), 0.0)
 		links.set_anchors(PackedVector2Array())
 		return
-	var anchors := PackedVector2Array()
+	# 各入れ物の上のあたりに金具。左から順につなぎ、いちばん右の入れ物の右側に起爆器の線を差す
+	var items: Array = []
 	for i in dest.size():
 		var t: Texture2D = _stage_tex(i + 1)
 		var h: float = STAGE_H[i] * BASE_RATIO
 		var w: float = h * t.get_width() / t.get_height()
-		# 入れ物の右上あたりの金具
-		anchors.append(dest[i] + Vector2(w * 0.32, -h * 0.05))
-	var last: Vector2 = anchors[anchors.size() - 1]
-	var lt: Texture2D = _stage_tex(dest.size())
-	var lh: float = STAGE_H[dest.size() - 1] * BASE_RATIO
-	var end := Vector2(dest[dest.size() - 1].x + lh * lt.get_width() / lt.get_height() * 0.5 + 4.0, dest[dest.size() - 1].y + lh * 0.15)
-	anchors[anchors.size() - 1] = end
+		items.append({"c": dest[i], "w": w, "h": h})
+	items.sort_custom(func(p: Dictionary, q: Dictionary) -> bool: return p.c.x < q.c.x)
+	var anchors := PackedVector2Array()
+	for it in items:
+		anchors.append(it.c + Vector2(0, -it.h * 0.3))
+	var r: Dictionary = items[items.size() - 1]
+	var end := Vector2(r.c.x + r.w * 0.5 + 4.0, r.c.y + r.h * 0.15)
+	anchors.append(end)
 	cable.set_ends(start, end, 1.0)
 	links.set_anchors(anchors)
 	links.reveal = 0.0
 	links.visible = false   # 線が届いてから出す
 
 
-## 並べた入れ物の中心位置。n 個を足元 base を中心に左から小さい順に並べる
+## 入れ物の中心位置（表彰台みたいなピラミッド）。
+##   前の段：束（左）・木箱（右）　中の段：大きい木箱（左）・パレット（右）　後ろのてっぺん：コンテナ
+## base は山の足元中央。位置は枚数によらず固定（置き場所の影と同じ）
 func _pile_layout(n: int, sc: float, base: Vector2) -> Array[Vector2]:
-	var ws: Array[float] = []
-	var total: float = 0.0
-	for i in n:
-		var t: Texture2D = _stage_tex(i + 1)
-		var w: float = STAGE_H[i] * sc * t.get_width() / t.get_height()
-		ws.append(w)
-		total += w
-	total += PILE_GAP * sc * (n - 1)
 	var out: Array[Vector2] = []
-	var x: float = base.x - total / 2.0
 	for i in n:
-		out.append(Vector2(x + ws[i] / 2.0, base.y - STAGE_H[i] * sc / 2.0))
-		x += ws[i] + PILE_GAP * sc
+		var slot: Vector2 = PILE_SLOTS[i]
+		var h: float = STAGE_H[i] * sc
+		out.append(Vector2(base.x + slot.x * sc, base.y + slot.y * sc - h / 2.0))
 	return out
+
+
+## 入れ物の重なり順（後ろの段ほど奥）
+func _pile_z(i: int) -> int:
+	return [6, 6, 5, 5, 4][i]
 
 
 ## クレーンのフックが上から箱を吊って降ろし、外して「ドスン」。n は何個目か
@@ -1131,7 +1130,7 @@ func _crate_thud(d: Node2D, at: Vector2, n: int) -> void:
 		_shake(22.0, 0.5)
 		flash.color = Color(1, 1, 0.9, 0.85)
 		create_tween().tween_property(flash, "color:a", 0.0, 0.35)
-		_big("MAX!!", Color(1, 0.85, 0.1), "max")
+		_big("まんたん！", Color(1, 0.85, 0.1), "max")
 		var ft := create_tween()
 		ft.tween_interval(0.9)
 		ft.tween_property(big_img, "modulate:a", 0.0, 0.25)
@@ -1176,6 +1175,25 @@ func _swap_out_old(n: int, at: Vector2) -> void:
 	tw.tween_property(poof, "scale", Vector2(big * 1.3, big), 0.25).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	tw.tween_property(poof, "modulate:a", 0.0, 0.4).set_delay(0.1)
 	tw.chain().tween_callback(poof.queue_free)
+
+
+## 置き場所の影をつくる／出す
+func _show_pile_ghosts(on: bool) -> void:
+	if pile_ghosts.is_empty():
+		var pos: Array[Vector2] = _pile_layout(STAGE_H.size(), 1.0, Vector2(CENTER_X, RACK_Y))
+		for i in STAGE_H.size():
+			var g := Sprite2D.new()
+			var t: Texture2D = _stage_tex(i + 1)
+			g.texture = t
+			var sc: float = STAGE_H[i] / t.get_height()
+			g.scale = Vector2(sc, sc)
+			g.position = pos[i]
+			g.modulate = GHOST_COLOR
+			g.z_index = _pile_z(i) - 3
+			add_child(g)
+			pile_ghosts.append(g)
+	for i in pile_ghosts.size():
+		pile_ghosts[i].visible = on and i >= _pile_stage
 
 
 func _stage_tex(n: int) -> Texture2D:
@@ -1460,6 +1478,7 @@ func _zoom() -> void:
 	uplight.visible = false
 	uplight_front.visible = false
 	arrow.visible = false
+	_show_pile_ghosts(false)
 	for b in buildings:
 		(b.get_meta("tag") as Label).visible = false
 		if b.has_meta("num"):
@@ -1504,7 +1523,7 @@ func _zoom() -> void:
 		f.texture = src.texture
 		f.scale = src.scale
 		f.global_position = d.global_position
-		f.z_index = 4
+		f.z_index = _pile_z(n - 1)
 		f.set_meta("stage", n)
 		add_child(f)
 		flyers.append(f)
@@ -1531,6 +1550,7 @@ func _zoom() -> void:
 		var n: int = int(f.get_meta("stage", 1))
 		var b: RigidBody2D = _make_container(n, STAGE_H[n - 1] * BASE_RATIO, PIECE_LAYER)
 		b.freeze = true
+		b.z_index = _pile_z(n - 1)
 		b.position = f.global_position
 		add_child(b)
 		base_sticks.append(b)
