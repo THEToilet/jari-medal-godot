@@ -495,7 +495,7 @@ func _build_ui() -> void:
 		if not ResourceLoader.exists(cp):
 			break
 		_crank_frames.append(load(cp))
-	for k in ["stop", "charge", "push", "boom", "lose"]:
+	for k in ["stop", "charge", "push", "boom", "lose", "max"]:
 		var tp: String = "res://assets/text/%s.png" % k
 		if ResourceLoader.exists(tp):
 			_text_img[k] = load(tp)
@@ -828,6 +828,8 @@ const RACK_H := 150.0          # 画面下に積むダイナマイト箱の高�
 const RACK_STEP := 46.0
 const RACK_ROW_H := 44.0
 const STICKS_PER_COIN := 1     # メダル1枚につきダイナマイト箱いくつ
+const HOOK_CHAIN_H := 46.0     # フックから箱の上面までのチェーンの長さ
+const HOOK_DOWN := 0.42        # フックが降りてくる時間
 
 
 ## 山積みの i 番目の位置（下の段から左詰め）
@@ -844,16 +846,89 @@ func _update_bet_label() -> void:
 	var k: int = 0
 	while rack.size() < want:
 		var d: RigidBody2D = _make_stick(RACK_H, STICK_LAYER)
-		d.freeze = true   # 物理では転がさず、決まった山の位置へ落とす
+		d.freeze = true   # 物理では転がさず、クレーンで決まった山の位置へ降ろす
 		var to: Vector2 = _crate_slot(rack.size(), RACK_H, Vector2(CENTER_X, RACK_Y))
-		d.position = to + Vector2(0, -620)
 		_crate_depth(d, rack.size())
 		add_child(d)
 		rack.append(d)
-		var tw := create_tween()
-		tw.tween_interval(k * 0.06)
-		tw.tween_property(d, "position", to, 0.4).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+		_crane_drop(d, to, rack.size(), k * 0.08)
 		k += 1
+
+
+## クレーンのフックが上から箱を吊って降ろし、外して「ドスン」。n は何個目か
+func _crane_drop(d: RigidBody2D, to: Vector2, n: int, delay: float) -> void:
+	var hang: Vector2 = to + Vector2(0, -34)          # 外す直前の高さ
+	var start: Vector2 = to + Vector2(0, -760)
+	var top_off: Vector2 = Vector2(0, -RACK_H / 2.0 - HOOK_CHAIN_H)
+	d.position = start
+	var hook := CraneHook.new()
+	hook.chain_w = RACK_H * 0.7
+	hook.chain_h = HOOK_CHAIN_H
+	hook.crate = d
+	hook.position = start + top_off
+	hook.z_index = 6
+	add_child(hook)
+	var tw := d.create_tween()
+	tw.tween_interval(delay)
+	tw.set_parallel(true)
+	tw.tween_property(d, "position", hang, HOOK_DOWN).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(hook, "position", hang + top_off, HOOK_DOWN).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	# 吊られて少し揺れる
+	tw.tween_property(d, "rotation", deg_to_rad(4), HOOK_DOWN * 0.5)
+	tw.set_parallel(false)
+	tw.tween_property(d, "rotation", deg_to_rad(-2), 0.08)
+	tw.tween_property(d, "rotation", 0.0, 0.06)
+	# 外す → 落ちてドスン
+	tw.tween_callback(func() -> void: hook.attached = false)
+	tw.tween_property(d, "position", to, 0.1).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.tween_callback(_crate_thud.bind(to, n))
+	# フックは上へ戻って消える
+	var up := hook.create_tween()
+	up.tween_interval(delay + HOOK_DOWN + 0.18)
+	up.tween_property(hook, "position:y", -260.0, 0.4).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	up.tween_callback(hook.queue_free)
+
+
+func _crate_thud(at: Vector2, n: int) -> void:
+	if state != S.BET:
+		return
+	_shake(5.0 + n * 2.5, 0.22)
+	Sfx.play("rumble", 70.0, 0.15)
+	# 土煙（左右にぽふっ）
+	for sx in [-1.0, 1.0]:
+		var sm := Sprite2D.new()
+		sm.texture = _tex["dust-cloud"]
+		sm.position = at + Vector2(sx * RACK_H * 0.45, RACK_H * 0.4)
+		sm.scale = Vector2(0.08, 0.08)
+		sm.flip_h = sx < 0.0
+		sm.z_index = 7
+		fx.add_child(sm)
+		var tw := sm.create_tween().set_parallel(true)
+		tw.tween_property(sm, "scale", Vector2(0.28, 0.2), 0.3).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		tw.tween_property(sm, "position:x", sm.position.x + sx * 60.0, 0.4)
+		tw.tween_property(sm, "modulate:a", 0.0, 0.45).set_delay(0.1)
+		tw.chain().tween_callback(sm.queue_free)
+	# 5個目（MAX）だけ特別：フラッシュ＋大きく揺れて「MAX!!」
+	if n >= MAX_BET:
+		_shake(22.0, 0.5)
+		flash.color = Color(1, 1, 0.9, 0.85)
+		create_tween().tween_property(flash, "color:a", 0.0, 0.35)
+		_big("MAX!!", Color(1, 0.85, 0.1), "max")
+		var ft := create_tween()
+		ft.tween_interval(0.9)
+		ft.tween_property(big_img, "modulate:a", 0.0, 0.25)
+		ft.tween_callback(func() -> void:
+			big_img.visible = false
+			big_img.modulate.a = 1.0
+			lbl_big.visible = false)
+
+
+## 積むほど危ない：山がガタガタ震える（BET中に毎フレーム）
+func _rack_jitter() -> void:
+	var amp: float = maxf(0.0, float(rack.size() - 1)) * 1.1
+	for d in rack:
+		var spr: Node2D = d.get_child(0)
+		spr.position = Vector2(randf_range(-amp, amp), randf_range(-amp * 0.4, amp * 0.4))
 
 
 ## ダイナマイト箱の山の i 番目の中心位置（下段3つ → 上段2つ）。base は山の足元中央
@@ -1133,6 +1208,8 @@ func _process(delta: float) -> void:
 		uplight.visible = state == S.BET
 		uplight_front.visible = state == S.BET
 		arrow.visible = state == S.BET
+		if state == S.BET:
+			_rack_jitter()
 	if false and crowd.visible:
 		var hop: float = absf(sin(Time.get_ticks_msec() * (0.006 + 0.014 * _crowd))) * (2.0 + 16.0 * _crowd)
 		crowd.position.y = _crowd_base_y - hop
@@ -1444,7 +1521,7 @@ func _big(text: String, color: Color, key: String = "") -> void:
 
 ## 連打フェーズの「れんだ！」文字。押すたびにポンと弾む
 const MASH_POS := Vector2(960, 250)
-const MASH_H := 190.0
+const MASH_H := 240.0
 var mash_text: Sprite2D
 var _mash_base: float = 1.0
 
