@@ -828,6 +828,9 @@ const RACK_H := 150.0          # 画面下に積むダイナマイト箱の高�
 const RACK_STEP := 46.0
 const RACK_ROW_H := 44.0
 const STICKS_PER_COIN := 1     # メダル1枚につきダイナマイト箱いくつ
+## ダイナマイト箱の画像の中での位置（0〜1）：導火線の先、木箱のふちの高さ
+const CRATE_FUSES := [Vector2(0.26, 0.015), Vector2(0.54, 0.015), Vector2(0.76, 0.041), Vector2(0.12, 0.088), Vector2(0.92, 0.143), Vector2(0.54, 0.12), Vector2(0.07, 0.21)]
+const CRATE_RIM_Y := 0.437
 const HOOK_CHAIN_H := 46.0     # フックから箱の上面までのチェーンの長さ
 const HOOK_DOWN := 0.42        # フックが降りてくる時間
 
@@ -859,10 +862,12 @@ func _update_bet_label() -> void:
 func _crane_drop(d: RigidBody2D, to: Vector2, n: int, delay: float) -> void:
 	var hang: Vector2 = to + Vector2(0, -34)          # 外す直前の高さ
 	var start: Vector2 = to + Vector2(0, -760)
-	var top_off: Vector2 = Vector2(0, -RACK_H / 2.0 - HOOK_CHAIN_H)
+	# チェーンは木箱のふちの両端にかける
+	var top_off: Vector2 = Vector2(0, -RACK_H / 2.0 + RACK_H * CRATE_RIM_Y - HOOK_CHAIN_H)
 	d.position = start
 	var hook := CraneHook.new()
-	hook.chain_w = RACK_H * 0.8
+	var ct: Texture2D = _tex["dynamite_crate"]
+	hook.chain_w = RACK_H * ct.get_width() / ct.get_height() * 0.92
 	hook.chain_h = HOOK_CHAIN_H
 	hook.crate = d
 	hook.position = start + top_off
@@ -933,7 +938,8 @@ func _rack_jitter() -> void:
 
 ## ダイナマイト箱の山の i 番目の中心位置（下段3つ → 上段2つ）。base は山の足元中央
 func _crate_slot(i: int, h: float, base: Vector2) -> Vector2:
-	var w: float = h * 0.86
+	var t: Texture2D = _tex["dynamite_crate"]
+	var w: float = h * t.get_width() / t.get_height()
 	var rows := [3, 2]
 	var r: int = 0 if i < 3 else 1
 	var c: int = i if i < 3 else i - 3
@@ -973,9 +979,9 @@ func _make_stick(h: float, layer: int) -> RigidBody2D:
 	cs.shape = rs
 	cs.position = Vector2(0, t.get_height() * 0.03 * sc)
 	body.add_child(cs)
-	for fx_x in [0.2, 0.38, 0.56, 0.74, 0.9]:
+	for tip in CRATE_FUSES:
 		var sp := FuseSpark.new()
-		sp.position = Vector2((fx_x - 0.5) * t.get_width(), (0.03 - 0.5) * t.get_height()) * sc
+		sp.position = Vector2((tip.x - 0.5) * t.get_width(), (tip.y - 0.5) * t.get_height()) * sc
 		sp.size = h / 180.0
 		body.add_child(sp)
 	return body
