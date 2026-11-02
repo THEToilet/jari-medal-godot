@@ -9,12 +9,12 @@ extends Cabinet
 enum S { WAIT, BET, ZOOM, CHARGE, DETONATE, RESULT }
 
 const BUILDINGS := [
-	{"name": "物置", "file": "wooden-shed", "payout": 1, "fixed": 0.98, "tempo": 0.6},
-	{"name": "一軒家", "file": "red-roof-house", "payout": 2, "tempo": 0.7},
+	{"name": "ものおき", "file": "wooden-shed", "payout": 1, "fixed": 0.98, "tempo": 0.6},
+	{"name": "おうち", "file": "red-roof-house", "payout": 2, "tempo": 0.7},
 	{"name": "アパート", "file": "two-story-apartment", "payout": 5, "tempo": 0.85},
-	{"name": "雑居ビル", "file": "four-story-mixed-use", "payout": 8, "tempo": 1.0},
+	{"name": "ざっきょビル", "file": "four-story-mixed-use", "payout": 8, "tempo": 1.0},
 	{"name": "マンション", "file": "eight-story-apartment", "payout": 10, "tempo": 1.0},
-	{"name": "高層ビル", "file": "fifteen-story-office", "payout": 20, "tempo": 1.0},
+	{"name": "こうそうビル", "file": "fifteen-story-office", "payout": 20, "tempo": 1.0},
 	{"name": "タワー", "file": "landmark-tower", "payout": 30, "tempo": 1.0},
 ]
 
@@ -574,7 +574,7 @@ func _reset() -> void:
 	insert_sign.visible = true
 	if _timed_out:
 		_timed_out = false
-		_say("時間切れ… メダル回収")
+		_say("じかんぎれ… メダルかいしゅう")
 		await get_tree().create_timer(2.0).timeout
 		if state != S.WAIT:
 			return
@@ -586,7 +586,7 @@ func _build_touch_ui() -> void:
 	if not (OS.has_feature("web") or DisplayServer.is_touchscreen_available() or OS.has_feature("mobile")):
 		return
 	var b := Button.new()
-	b.text = "メダル\n投入"
+	b.text = "メダル\nいれる"
 	b.focus_mode = Control.FOCUS_NONE
 	b.size = Vector2(200, 160)
 	b.position = Vector2(1920 - 200 - 24, 24)
@@ -613,7 +613,7 @@ func _build_touch_ui() -> void:
 
 func _say_wait() -> void:
 	if MedalWallet.medals <= 0:
-		_say("メダルがない… [F2]で補充")
+		_say("メダルがない… [F2]でほじゅう")
 	else:
 		_say("")
 	insert_sign.visible = true
@@ -817,7 +817,7 @@ func _refresh_one(b: Building) -> void:
 	if b.has_meta("num"):
 		l.text = ""    # 数字は画像で表示
 	else:
-		l.text = "%d枚" % d.payout
+		l.text = "%dまい" % d.payout
 		l.add_theme_font_size_override("font_size", 38)
 
 
@@ -1054,7 +1054,7 @@ func _insert() -> void:
 		Sfx.play("beep", 300.0, 0.15)
 		return
 	if not MedalWallet.spend(1):
-		_say("メダルがない… [F2]で補充")
+		_say("メダルがない… [F2]でほじゅう")
 		Sfx.play("beep", 300.0, 0.2)
 		return
 	bet += 1

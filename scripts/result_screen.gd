@@ -121,7 +121,7 @@ func show_result(payout: int, building_name: String, num_tex: Texture2D) -> void
 	_sparks.clear()
 	_next_fw = 0.3
 	visible = true
-	title.text = ["解体成功！", "解体大成功！！", "超・大解体！！！"][rank]
+	title.text = ["かいたいせいこう！", "かいたいだいせいこう！！", "ちょう・だいかいたい！！！"][rank]
 	var tkey: String = "title_%d" % rank
 	title.visible = not _img.has(tkey)
 	title_spr.visible = _img.has(tkey)
@@ -142,7 +142,7 @@ func show_result(payout: int, building_name: String, num_tex: Texture2D) -> void
 		create_tween().tween_property(burst, "modulate:a", 0.92, 0.3)
 	halo.visible = burst.visible
 	halo.rank = rank
-	sub.text = "%s を解体した！" % building_name
+	sub.text = "%s を かいたいした！" % building_name
 	num.texture = num_tex
 	var target_h: float = [240.0, 290.0, 340.0][rank]
 	var ns: float = target_h / num_tex.get_height() if num_tex else 1.0
