@@ -1890,45 +1890,46 @@ func _explode() -> void:
 var _smokes: Array[Sprite2D] = []
 
 func _smoke_cover(dur: float) -> void:
-	# ビル全体をすき間なく覆う：雲を格子状（互い違い）に並べて、下の段から順にもくもく湧かせる
+	# 建物の真ん中を軸に、下は大きく横に広がり、上へいくほど小さくなる土煙の柱。
+	# 数・大きさ・ずれは建物ごとに決まった値（毎回同じ形で自然に隠れる）
 	var s: float = chosen.scale.x
 	var w: float = chosen.size().x * s
 	var h: float = chosen.size().y * s
 	var tex: Texture2D = _tex["dust-cloud"]
-	# 雲の大きさ・位置のばらつきは建物ごとに決まった並び（毎回同じ形で隠れる）
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash(str(chosen.data.file))
-	var cw: float = clampf(w * 0.8, 300.0, 560.0)          # 雲1つの表示幅（基準）
-	var sc: float = cw / tex.get_width()
-	var ch: float = tex.get_height() * sc
-	var left: float = CENTER_X - w / 2.0 - 40.0
-	var right: float = CENTER_X + w / 2.0 + 40.0
-	var top: float = GROUND_Y - h - 30.0
-	var bottom: float = GROUND_Y + 30.0
-	var step_x: float = cw * 0.55
-	var step_y: float = ch * 0.5
-	var cols: int = maxi(1, int(ceil((right - left) / step_x)))
-	var rows: int = maxi(1, int(ceil((bottom - top) / step_y)))
-	for r in rows:
-		var y: float = bottom - ch * 0.3 - r * step_y
-		var n: int = cols + (r % 2)
-		var span: float = step_x * (n - 1)
-		for c in n:
-			var sm := Sprite2D.new()
-			sm.texture = tex
-			sm.position = Vector2(CENTER_X - span / 2.0 + c * step_x + rng.randf_range(-step_x * 0.18, step_x * 0.18), y + rng.randf_range(-step_y * 0.2, step_y * 0.2))
-			sm.scale = Vector2(0.15, 0.15) * sc
-			sm.modulate.a = 0.0
-			sm.flip_h = rng.randf() < 0.5
-			sm.z_index = 5
-			fx.add_child(sm)
-			_smokes.append(sm)
-			var tgt: float = sc * rng.randf_range(0.8, 1.35)
-			var tw := create_tween().set_parallel(true)
-			tw.tween_interval(dur * 0.35 * float(r) / float(rows))
-			tw.chain().tween_property(sm, "scale", Vector2(tgt, tgt), dur * 0.7).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-			tw.parallel().tween_property(sm, "modulate:a", 1.0, dur * 0.3)
-			tw.parallel().tween_property(sm, "position:x", sm.position.x + randf_range(-12, 12), dur * 4.0)
+	var big: float = maxf(w * 1.15, 380.0)      # 根元の雲の幅
+	var small: float = maxf(w * 0.75, 260.0)    # てっぺんの雲の幅
+	var n: int = 3 + int(h / 160.0)
+	var specs: Array = []   # [位置, 幅, 何番目の高さか(0〜1)]
+	for i in n:
+		var t: float = float(i) / float(maxi(n - 1, 1))
+		var cw: float = lerpf(big, small, t) * rng.randf_range(0.85, 1.15)
+		var side: float = -1.0 if i % 2 == 0 else 1.0
+		var x: float = CENTER_X + side * rng.randf_range(0.0, w * 0.12)
+		var y: float = GROUND_Y - 20.0 - t * h * 0.92
+		specs.append([Vector2(x, y), cw, t])
+	# 根元の左右に、地面をはうように広がる雲
+	for side in [-1.0, 1.0]:
+		var cw2: float = big * rng.randf_range(0.7, 0.9)
+		specs.append([Vector2(CENTER_X + side * big * rng.randf_range(0.4, 0.5), GROUND_Y + 10.0), cw2, 0.0])
+	for sp in specs:
+		var sm := Sprite2D.new()
+		sm.texture = tex
+		sm.position = sp[0]
+		var sc: float = float(sp[1]) / tex.get_width()
+		sm.scale = Vector2(0.15, 0.15) * sc
+		sm.modulate.a = 0.0
+		sm.flip_h = rng.randf() < 0.5
+		sm.rotation = deg_to_rad(rng.randf_range(-8, 8))
+		sm.z_index = 5
+		fx.add_child(sm)
+		_smokes.append(sm)
+		var tw := create_tween()
+		tw.tween_interval(dur * 0.3 * float(sp[2]))   # 下から順に湧き上がる
+		tw.tween_property(sm, "scale", Vector2(sc, sc), dur * 0.7).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		tw.parallel().tween_property(sm, "modulate:a", 1.0, dur * 0.3)
+		tw.parallel().tween_property(sm, "position:x", sm.position.x + rng.randf_range(-15, 15), dur * 4.0)
 	await get_tree().create_timer(dur * 0.8).timeout
 
 
@@ -1974,8 +1975,8 @@ func _big(text: String, color: Color, key: String = "") -> void:
 	if key != "" and _text_img.has(key):
 		lbl_big.text = ""
 		big_img.texture = _text_img[key]
-		var h: float = {"boom": 420.0, "push": 360.0}.get(key, 300.0)
-		var cy: float = {"push": 20.0}.get(key, 110.0)   # 画面の上のほう、ボタンにかぶらない高さに
+		var h: float = {"boom": 420.0, "push": 280.0}.get(key, 300.0)
+		var cy: float = {"push": -15.0}.get(key, 110.0)   # 画面の上のほう、ボタンにかぶらない高さに
 		big_img.size = Vector2(h * big_img.texture.get_width() / big_img.texture.get_height(), h)
 		big_img.position = Vector2(900.0 - big_img.size.x / 2.0, cy - h / 2.0)
 		big_img.visible = true
