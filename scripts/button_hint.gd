@@ -32,9 +32,22 @@ func press() -> void:
 func reset() -> void:
 	_since_press = 99.0
 	_t = 0.0
+	_held = false
+
+
+## 起爆：押し込んだまま止める（大きい輪を2つ）
+func slam() -> void:
+	_held = true
+	_rings.append(0.0)
+	_rings.append(-0.12)
+
+
+var _held: bool = false
 
 
 func _cur() -> int:
+	if _held:
+		return 1
 	if _since_press < IDLE_AUTO:
 		return 1 if _since_press < PRESS_HOLD else 0
 	return _frame_at(fmod(_t, interval) / interval)
@@ -81,6 +94,8 @@ func _draw() -> void:
 	var h: float = w * t.get_height() / t.get_width()
 	# 衝撃の輪（土台のまわりに広がる）
 	for r in _rings:
+		if r < 0.0:
+			continue
 		var k: float = r / 0.35
 		var rad: float = w * (0.5 + 0.55 * k)
 		draw_set_transform(Vector2(0, -h * 0.22), 0.0, Vector2(1.0, 0.42))

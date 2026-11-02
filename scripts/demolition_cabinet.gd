@@ -526,7 +526,7 @@ func _build_ui() -> void:
 	ui.add_child(fuse)
 	btn_hint = ButtonHint.new()
 	btn_hint.tex = load("res://assets/red-arcade-button.png")
-	btn_hint.position = Vector2(CENTER_X, 860)   # 画面中央にでかでかと
+	btn_hint.position = Vector2(CENTER_X, BTN_Y)   # 画面中央にでかでかと
 	btn_hint.visible = false
 	ui.add_child(btn_hint)
 	_build_touch_ui()
@@ -924,6 +924,7 @@ const HOOK_DOWN := 0.42        # フックが降りてくる時間
 const FLY_TIME := 0.42         # 箱がビルの足元へ跳ぶ時間
 const FLY_GAP := 0.11          # 1個ずつ跳ぶ間隔
 const FLY_ARC := 170.0         # 跳ぶ高さ
+const BTN_Y := 860.0           # 連打・起爆ボタンの位置（土台の下端）
 const WIRE_RUN := 0.35         # 発破線が伸びる時間
 ## 入れ物の格上げ（メダル1枚目〜5枚目）。束 → 木箱 → 大きい木箱 → パレットの木枠 → コンテナ
 ## 絵は assets/pile/stage_<N>.png。無い段階は木箱の絵を大きさだけ変えて代用する
@@ -1556,7 +1557,7 @@ func _start_charge() -> void:
 	btn_hint.interval = 0.6
 	btn_hint.size_px = 400.0
 	btn_hint.reset()
-	btn_hint.visible = true
+	_fade_in_button()
 	_show_mash_text()
 	_pose(foreman, "chara/foreman_1")
 	Sfx.hum_level = 0.3
@@ -1664,7 +1665,8 @@ func _enter_detonate() -> void:
 	# 起爆の合図：同じボタンアニメを大きく、ゆっくり
 	btn_hint.interval = 1.2
 	btn_hint.size_px = 460.0
-	btn_hint.visible = true
+	btn_hint.reset()
+	_fade_in_button()
 	_armed = false
 	_released = not _tap_held()
 	_say("")
@@ -1686,9 +1688,21 @@ func _enter_detonate() -> void:
 
 func _detonate() -> void:
 	_enter(S.RESULT)
-	btn_hint.visible = false
+	# 押したボタンはしっかり押し込んで見せてから消す
+	btn_hint.slam()
+	Sfx.play("tap", 0.0, 0.05)
+	_shake(6.0, 0.15)
+	var bt := btn_hint.create_tween()
+	bt.tween_property(btn_hint, "scale", Vector2(1.06, 0.94), 0.06)
+	bt.tween_property(btn_hint, "scale", Vector2.ONE, 0.12)
+	bt.tween_interval(0.2)
+	bt.tween_property(btn_hint, "modulate:a", 0.0, 0.25)
+	bt.tween_callback(func() -> void: btn_hint.visible = false)
+	var lt := lbl_big.create_tween()
+	lt.tween_property(lbl_big, "modulate:a", 0.0, 0.2)
+	lt.tween_callback(func() -> void: lbl_big.visible = false)
+	await get_tree().create_timer(0.35).timeout
 	plunger.modulate = Color.WHITE
-	lbl_big.visible = false
 	Sfx.hum_level = 0.0
 	# ここで初めてスイッチを押し込む：大ジャンプで叩き込む
 	_set_push_frame(PUSH_SLAM)
@@ -1709,7 +1723,6 @@ func _detonate() -> void:
 		charge_box.level = 0
 		charge_box.visible = false)
 	cable.flow = 40.0
-	Sfx.play("tap", 0.0, 0.05)
 	var surge := create_tween()
 	surge.tween_property(cable, "power", 1.0, 0.12)
 	surge.tween_callback(_light_fuses)
@@ -1940,8 +1953,8 @@ func _big(text: String, color: Color, key: String = "") -> void:
 	if key != "" and _text_img.has(key):
 		lbl_big.text = ""
 		big_img.texture = _text_img[key]
-		var h: float = {"boom": 420.0, "push": 530.0}.get(key, 300.0)
-		var cy: float = {"push": 75.0}.get(key, 110.0)   # 2段の文字はボタンにかぶらない高さに
+		var h: float = {"boom": 420.0, "push": 320.0}.get(key, 300.0)
+		var cy: float = {"push": -10.0}.get(key, 110.0)   # 画面の上のほう、ボタンにかぶらない高さに
 		big_img.size = Vector2(h * big_img.texture.get_width() / big_img.texture.get_height(), h)
 		big_img.position = Vector2(900.0 - big_img.size.x / 2.0, cy - h / 2.0)
 		big_img.visible = true
@@ -1954,6 +1967,19 @@ func _big(text: String, color: Color, key: String = "") -> void:
 	lbl_big.rotation = deg_to_rad(-6)
 	lbl_big.scale = Vector2(0.3, 0.3)
 	create_tween().tween_property(lbl_big, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+## 連打・起爆のボタンをふわっと出す（下から少し浮き上がりながら）
+func _fade_in_button() -> void:
+	btn_hint.visible = true
+	btn_hint.modulate.a = 0.0
+	btn_hint.scale = Vector2(0.85, 0.85)
+	var base_y: float = BTN_Y
+	btn_hint.position.y = base_y + 40.0
+	var tw := btn_hint.create_tween().set_parallel(true)
+	tw.tween_property(btn_hint, "modulate:a", 1.0, 0.35)
+	tw.tween_property(btn_hint, "scale", Vector2.ONE, 0.4).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(btn_hint, "position:y", base_y, 0.4).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 
 
 ## 溜まった電気の段階が上がったら、起爆器がバチッと光ってランプが増え、音が上がる
