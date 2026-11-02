@@ -1083,7 +1083,7 @@ func _start_charge() -> void:
 	_enter(S.CHARGE)
 	_say("")
 	# ボタン連打の合図
-	btn_hint.interval = 0.38
+	btn_hint.interval = 0.6
 	btn_hint.size_px = 400.0
 	btn_hint.visible = true
 	_pose(foreman, "chara/foreman_1")
@@ -1147,7 +1147,7 @@ func _enter_detonate() -> void:
 	Sfx.hum_pitch = power
 	_enter(S.DETONATE)
 	# 起爆の合図：同じボタンアニメを大きく、ゆっくり
-	btn_hint.interval = 0.8
+	btn_hint.interval = 1.2
 	btn_hint.size_px = 460.0
 	btn_hint.visible = true
 	_armed = false
