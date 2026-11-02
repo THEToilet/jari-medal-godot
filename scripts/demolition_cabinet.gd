@@ -1890,7 +1890,7 @@ func _explode() -> void:
 var _smokes: Array[Sprite2D] = []
 
 func _smoke_cover(dur: float) -> void:
-	# 建物の真ん中を軸に、下は大きく横に広がり、上へいくほど小さくなる土煙の柱。
+	# 建物の真ん中を軸に、上から下まで同じ太さの土煙の柱（ばらつきは少しだけ）。
 	# 数・大きさ・ずれは建物ごとに決まった値（毎回同じ形で自然に隠れる）
 	var s: float = chosen.scale.x
 	var w: float = chosen.size().x * s
@@ -1898,8 +1898,8 @@ func _smoke_cover(dur: float) -> void:
 	var tex: Texture2D = _tex["dust-cloud"]
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash(str(chosen.data.file))
-	var big: float = maxf(w * 1.15, 380.0)      # 根元の雲の幅
-	var small: float = maxf(w * 0.75, 260.0)    # てっぺんの雲の幅
+	var big: float = maxf(w * 1.3, 400.0)       # 雲の幅（上から下まで同じ太さの四角い柱）
+	var small: float = big
 	var n: int = 3 + int(h / 160.0)
 	var specs: Array = []   # [位置, 幅, 何番目の高さか(0〜1)]
 	for i in n:
@@ -1909,10 +1909,6 @@ func _smoke_cover(dur: float) -> void:
 		var x: float = CENTER_X + side * rng.randf_range(0.0, w * 0.12)
 		var y: float = GROUND_Y - 20.0 - t * h * 0.92
 		specs.append([Vector2(x, y), cw, t])
-	# 根元の左右に、地面をはうように広がる雲
-	for side in [-1.0, 1.0]:
-		var cw2: float = big * rng.randf_range(0.7, 0.9)
-		specs.append([Vector2(CENTER_X + side * big * rng.randf_range(0.4, 0.5), GROUND_Y + 10.0), cw2, 0.0])
 	for sp in specs:
 		var sm := Sprite2D.new()
 		sm.texture = tex
