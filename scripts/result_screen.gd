@@ -6,7 +6,7 @@ extends Node2D
 ##   rank 1（8〜20枚） : 金色の光線＋紙吹雪多め＋花火
 ##   rank 2（30枚）    : 虹色の光線＋花火連発＋フラッシュ
 ## assets/result/ に画像があれば優先して使う（無ければコードで描く）:
-##   burst_gold.png / burst_rainbow.png … 背景の放射光線（rank0,1 は gold、rank2 は rainbow）
+##   burst_gold.png … 背景の放射光線（全ランク共通）
 ##   title_0.png / title_1.png / title_2.png … タイトル文字（解体成功！ / 解体大成功！！ / 超・大解体！！！）
 ##   get.png … 「メダルゲット！」のリボン
 
@@ -133,7 +133,7 @@ func show_result(payout: int, building_name: String, num_tex: Texture2D) -> void
 		title_spr.set_meta("s", ts)
 		title_spr.scale = Vector2(0.1, 0.1) * ts
 		create_tween().tween_property(title_spr, "scale", Vector2(ts, ts), 0.45).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
-	var bkey: String = "burst_rainbow" if rank == 2 else "burst_gold"
+	var bkey: String = "burst_gold"   # どのランクも金の光線（虹色は使わない）
 	burst.visible = _img.has(bkey)
 	if _img.has(bkey):
 		burst.texture = _img[bkey]

@@ -19,7 +19,7 @@ var _last: int = 0
 var _rings: Array[float] = []
 var _since_press: float = 99.0
 ## 最後に押されてからこの秒数は「押したら凹む」だけ。それを過ぎたら自動で押して促す
-const IDLE_AUTO := 1.2
+var idle_auto: float = 1.5   # この秒数押されなかったら自動で押して見せる
 const PRESS_HOLD := 0.09
 
 
@@ -30,7 +30,8 @@ func press() -> void:
 
 
 func reset() -> void:
-	_since_press = 99.0
+	# 出てすぐは止まっていて、しばらく押されなかったときだけ自動で押して見せる
+	_since_press = PRESS_HOLD + 0.001
 	_t = 0.0
 	_held = false
 
@@ -48,7 +49,7 @@ var _held: bool = false
 func _cur() -> int:
 	if _held:
 		return 1
-	if _since_press < IDLE_AUTO:
+	if _since_press < idle_auto:
 		return 1 if _since_press < PRESS_HOLD else 0
 	return _frame_at(fmod(_t, interval) / interval)
 
@@ -73,7 +74,7 @@ func _process(delta: float) -> void:
 		return
 	_t += delta
 	_since_press += delta
-	var auto: bool = _since_press >= IDLE_AUTO
+	var auto: bool = _since_press >= idle_auto
 	var f: int = _cur()
 	if auto and f == 1 and _last != 1:
 		_rings.append(0.0)       # 底まで押した瞬間
