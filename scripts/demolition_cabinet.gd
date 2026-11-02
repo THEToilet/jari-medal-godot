@@ -99,6 +99,13 @@ var tray: MedalTray
 var plunger: Sprite2D
 var cable_gen: Cable
 var links: LinkWires
+var charge_box: ChargeBox
+var _charge_lv: int = 0
+## 起爆器の箱（foreman_push の絵の中）の中心と大きさ（画面px）
+const BOX_CENTER_OFF := Vector2(0, -57)
+const BOX_SIZE := Vector2(128, 114)
+## 電気が溜まる段階。power がこの値を超えるたびにレベルアップ（最後が MAX）
+const CHARGE_STEPS := [0.2, 0.45, 0.7, 0.95]
 var meter: ChargeMeter
 var _pump: Tween
 var _push_i: int = 0
@@ -337,6 +344,13 @@ func _build_world() -> void:
 	_set_push_frame(0)
 	plunger.scale = Vector2(PLUNGER_SCALE, PLUNGER_SCALE)
 	add_child(plunger)
+	# 起爆器の箱に電気が溜まる表示（ランプ＋漏れる光）
+	charge_box = ChargeBox.new()
+	charge_box.position = Vector2(PLUNGER_X, PLUNGER_Y) + BOX_CENTER_OFF
+	charge_box.box_size = BOX_SIZE
+	charge_box.visible = false
+	charge_box.z_index = 6
+	add_child(charge_box)
 	meter = ChargeMeter.new()
 	meter.position = Vector2(PLUNGER_X + 150, PLUNGER_Y - 10)
 	meter.visible = false
@@ -588,6 +602,8 @@ func _reset() -> void:
 	links.visible = false
 	cable_gen.power = 0.0
 	cable_gen.visible = false   # 選ぶ間は出さない（並べたダイナマイトにかぶるので）
+	charge_box.visible = false
+	plunger.position = Vector2(PLUNGER_X, PLUNGER_Y)
 	_layout_gen_cable()
 	plunger.modulate = Color.WHITE
 	_set_push_frame(0)
@@ -1513,6 +1529,10 @@ func _zoom() -> void:
 func _start_charge() -> void:
 	# 回し始めたら汗は引っ込めて、いつものクランクの絵に戻す
 	_reset_fear()
+	_charge_lv = 0
+	charge_box.level = 0
+	charge_box.power = 0.0
+	charge_box.visible = true
 	power = 0.0
 	_charge_left = charge_time
 	_enter(S.CHARGE)
@@ -1533,6 +1553,7 @@ func _on_tap() -> void:
 	Sfx.play("tap", 0.0, 0.05)
 	btn_hint.press()
 	_bump_mash_text()
+	_check_charge_level()
 	# 押すたびに作業員が発電機のハンドルを1コマ回す
 	if not _crank_frames.is_empty():
 		_crank_phase += 1.0
@@ -1597,10 +1618,16 @@ func _process(delta: float) -> void:
 		dynamo.power = power
 		meter.power = power
 		cable.power = 0.0   # スイッチを押すまで建物側には流れない
-		cable_gen.power = power
-		cable_gen.flow = dynamo.spin
+		# 線の光り方は段階ごとにグッと上がる（段階の間は少しずつ）
+		var lv_f: float = float(_charge_lv) / float(CHARGE_STEPS.size())
+		cable_gen.power = clampf(lv_f * 0.85 + power * 0.15, 0.0, 1.0)
+		cable_gen.flow = maxf(cable_gen.flow - delta * 120.0, dynamo.spin)
+		charge_box.power = lv_f
+		# 箱（と監督）が溜まるほどガタガタ
+		var jit: float = lv_f * 2.5
+		plunger.position = Vector2(PLUNGER_X + randf_range(-jit, jit), PLUNGER_Y + randf_range(-jit * 0.5, jit * 0.5))
 		Sfx.hum_level = 0.25 + 0.6 * dynamo.spin / 30.0
-		Sfx.hum_pitch = power * 0.6 + dynamo.spin / 30.0
+		Sfx.hum_pitch = float(_charge_lv) * 0.25 + power * 0.15 + dynamo.spin / 40.0
 		pass
 		_crowd = 0.2 + power * 0.6
 		if _charge_left <= 0.0:
@@ -1611,6 +1638,7 @@ func _process(delta: float) -> void:
 
 func _enter_detonate() -> void:
 	_hide_mash_text()
+	plunger.position = Vector2(PLUNGER_X, PLUNGER_Y)
 	lbl_timer.text = ""
 	fuse.visible = false
 	btn_hint.visible = false
@@ -1659,6 +1687,12 @@ func _detonate() -> void:
 	print("[抽選] %s 爆弾%d パワー%.2f → 確率%.1f%% → %s" % [chosen.data.name, bet, power, p * 100.0, "崩壊" if win else "残る"])
 	# スイッチを押した瞬間、溜めた電気が一気に建物へ走る
 	create_tween().tween_property(cable_gen, "power", 0.0, 0.3)
+	# 起爆器に溜めた電気が一気に抜けていく
+	var drain := create_tween()
+	drain.tween_property(charge_box, "power", 0.0, 0.4)
+	drain.tween_callback(func() -> void:
+		charge_box.level = 0
+		charge_box.visible = false)
 	cable.flow = 40.0
 	Sfx.play("tap", 0.0, 0.05)
 	var surge := create_tween()
@@ -1896,6 +1930,28 @@ func _big(text: String, color: Color, key: String = "") -> void:
 	lbl_big.rotation = deg_to_rad(-6)
 	lbl_big.scale = Vector2(0.3, 0.3)
 	create_tween().tween_property(lbl_big, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+## 溜まった電気の段階が上がったら、起爆器がバチッと光ってランプが増え、音が上がる
+func _check_charge_level() -> void:
+	var lv: int = 0
+	for th in CHARGE_STEPS:
+		if power >= th:
+			lv += 1
+	if lv <= _charge_lv:
+		return
+	_charge_lv = lv
+	charge_box.level_up(lv)
+	var is_max: bool = lv >= CHARGE_STEPS.size()
+	Sfx.play_pitch("chargeup", 0.75 + 0.22 * lv, -4.0 + lv)
+	_shake(3.0 + lv * 2.5, 0.2)
+	# 線にも一瞬どっと流れる
+	cable_gen.flow = 60.0
+	if is_max:
+		Sfx.play_pitch("chargeup", 2.0, 0.0)
+		flash.color = Color(0.8, 0.95, 1.0, 0.55)
+		create_tween().tween_property(flash, "color:a", 0.0, 0.4)
+		_shake(16.0, 0.4)
 
 
 ## 連打フェーズの「れんだ！」文字。押すたびにポンと弾む
