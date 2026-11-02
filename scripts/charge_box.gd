@@ -1,7 +1,8 @@
 class_name ChargeBox
 extends Node2D
-## 起爆器の箱に電気が溜まっていく表示。箱の前面にランプが4つ並び、
-## レベルが上がるたびに1つずつ点いて、箱のまわりから青白い光が漏れ出す。
+## 起爆器の箱に電気が溜まっていく演出（ゲージは出さない）。
+## 溜まるほど箱のまわりの青白い光が大きく明るくなり、ビリビリが増えていく。
+## レベルが上がるたびにバチッと閃光。
 ## 原点は箱の中心。
 
 const LAMPS := 4
@@ -35,10 +36,24 @@ func _draw() -> void:
 	var hw: Vector2 = box_size / 2.0
 	# 箱のまわりから漏れる光（溜まるほど大きく明るく、ゆらゆら）
 	if power > 0.02:
-		var wob: float = 1.0 + sin(_t * 18.0) * 0.04 * power
-		for k in 3:
-			var r: float = (hw.x + 20.0 + 40.0 * power + k * 18.0) * wob
-			draw_circle(Vector2.ZERO, r, Color(AURA, (0.10 + 0.14 * power) / (k + 1)))
+		var wob: float = 1.0 + sin(_t * 18.0) * 0.05 * power
+		for k in 4:
+			var r: float = (hw.x * 0.7 + 30.0 + 70.0 * power + k * 22.0) * wob
+			draw_circle(Vector2.ZERO, r, Color(AURA, (0.16 + 0.3 * power) / (k + 1)))
+		draw_circle(Vector2.ZERO, hw.x * (0.4 + 0.3 * power), Color(CORE, 0.25 * power))
+		# 箱のまわりをはい回るビリビリ（溜まるほど本数が増えて長く）
+		var n: int = int(power * 6.0)
+		for i in n:
+			var a: float = randf() * TAU
+			var p := Vector2(cos(a) * hw.x * 0.9, sin(a) * hw.y * 0.9)
+			var bolt := PackedVector2Array([p])
+			for s2 in 3 + int(power * 3.0):
+				p += Vector2(cos(a), sin(a)) * randf_range(10, 22) + Vector2(randf_range(-12, 12), randf_range(-12, 12))
+				bolt.append(p)
+			draw_polyline(bolt, Color(AURA, 0.45), 10.0)
+			draw_polyline(bolt, Color(OUT, 0.9), 6.0)
+			draw_polyline(bolt, ON, 3.5)
+			draw_polyline(bolt, CORE, 1.5)
 	# レベルアップの閃光：輪と放射状のビリビリ
 	if _flash > 0.0:
 		var fr: float = hw.x + (1.0 - _flash) * 160.0
@@ -53,21 +68,3 @@ func _draw() -> void:
 				bolt.append(p)
 			draw_polyline(bolt, Color(AURA, 0.5 * _flash), 12.0)
 			draw_polyline(bolt, Color(CORE, _flash), 4.0)
-	# ランプの台
-	var lw: float = 24.0
-	var gap: float = 6.0
-	var total: float = LAMPS * lw + (LAMPS - 1) * gap
-	var panel := Rect2(-total / 2.0 - 10.0, -18.0, total + 20.0, 36.0)
-	draw_rect(panel.grow(4), OUT)
-	draw_rect(panel, Color(0.12, 0.13, 0.16))
-	for i in LAMPS:
-		var c := Vector2(-total / 2.0 + lw / 2.0 + i * (lw + gap), 0)
-		var lit: bool = i < level
-		draw_circle(c, lw / 2.0 + 2.0, OUT)
-		if lit:
-			var blink: float = 0.85 + 0.15 * sin(_t * 20.0 + i)
-			draw_circle(c, lw / 2.0 + 8.0, Color(AURA, 0.35 * blink))
-			draw_circle(c, lw / 2.0, ON * blink)
-			draw_circle(c + Vector2(-3, -3), lw * 0.18, CORE)
-		else:
-			draw_circle(c, lw / 2.0, OFF)

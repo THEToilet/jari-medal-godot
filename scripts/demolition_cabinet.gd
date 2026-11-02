@@ -129,6 +129,7 @@ const TITLE_IDLE := 15.0
 var _title_boot: bool = true
 var _wait_t: float = 0.0
 var _medals_txt: String = ""
+var _result_lock: bool = false   # リザルト表示中はメダルを受け付けない
 ## メダルを入れたのに選ばないまましばらく経ったら、選び方の案内を出す
 const SELECT_HINT_AFTER := 6.0
 const SELECT_HINT_Y := 8.0          # 案内は▼の上。出ている間は▼を下へずらす
@@ -345,12 +346,13 @@ func _build_world() -> void:
 	plunger.scale = Vector2(PLUNGER_SCALE, PLUNGER_SCALE)
 	add_child(plunger)
 	# 起爆器の箱に電気が溜まる表示（ランプ＋漏れる光）
+	# 箱の後ろから光が漏れるように、起爆器の絵の「後ろ」に描く
 	charge_box = ChargeBox.new()
-	charge_box.position = Vector2(PLUNGER_X, PLUNGER_Y) + BOX_CENTER_OFF
-	charge_box.box_size = BOX_SIZE
+	charge_box.position = BOX_CENTER_OFF / PLUNGER_SCALE
+	charge_box.box_size = BOX_SIZE / PLUNGER_SCALE
 	charge_box.visible = false
-	charge_box.z_index = 6
-	add_child(charge_box)
+	charge_box.show_behind_parent = true
+	plunger.add_child(charge_box)
 	meter = ChargeMeter.new()
 	meter.position = Vector2(PLUNGER_X + 150, PLUNGER_Y - 10)
 	meter.visible = false
@@ -1394,6 +1396,8 @@ func _tap_held() -> bool:
 
 
 func _insert() -> void:
+	if _result_lock:
+		return
 	if state != S.WAIT and state != S.BET:
 		return
 	_bet_idle = 0.0
@@ -1770,13 +1774,21 @@ func _play_result(win: bool) -> void:
 		Sfx.set_bgm_volume(-30.0)
 		result.show_result(payout, chosen.data.name, num_tex)
 		_fanfare(rank)
+		# リザルトを出している裏で、次のプレイの待機画面に戻しておく（閉じたらすぐ遊べる）
+		_result_lock = true
+		ui.visible = false
 		var min_show := get_tree().create_timer(RESULT_TIME[rank])
-		await get_tree().create_timer(0.6).timeout
+		await get_tree().create_timer(0.45).timeout
+		_end(payout)
+		await get_tree().create_timer(0.15).timeout
 		await tray.payout(payout, Vector2(CENTER_X, 560))
 		if min_show.time_left > 0.0:
 			await min_show.timeout
+		ui.visible = true
 		await result.hide_result()
+		_result_lock = false
 		Sfx.set_bgm_volume(-10.0)
+		return
 	else:
 		_say("")
 		_big("しっぱい……", Color(0.5, 0.75, 1.0), "lose")
