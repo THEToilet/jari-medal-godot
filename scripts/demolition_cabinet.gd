@@ -861,6 +861,15 @@ const HOOK_DOWN := 0.42        # フックが降りてくる時間
 const FLY_TIME := 0.42         # 箱がビルの足元へ跳ぶ時間
 const FLY_GAP := 0.11          # 1個ずつ跳ぶ間隔
 const FLY_ARC := 170.0         # 跳ぶ高さ
+## 入れ物の格上げ（メダル1枚目〜5枚目）。束 → 木箱 → 大きい木箱 → パレットの木枠 → コンテナ
+## 絵は assets/pile/stage_<N>.png。無い段階は木箱の絵を大きさだけ変えて代用する
+const STAGE_H := [95.0, 135.0, 175.0, 215.0, 260.0]   # 画面下での表示の高さ
+const BASE_RATIO := 0.72                              # ビルの足元に置くときの縮み具合
+## 絵ごとの位置（0〜1）：チェーンをかける高さ、導火線の先。絵が届いたら合わせる
+const STAGE_RIM := {2: 0.437}
+const STAGE_FUSES := {2: [Vector2(0.26, 0.015), Vector2(0.54, 0.015), Vector2(0.76, 0.041), Vector2(0.12, 0.088), Vector2(0.92, 0.143), Vector2(0.54, 0.12), Vector2(0.07, 0.21)]}
+var _pile_stage: int = 0
+var _old_piles: Array[Node2D] = []
 
 
 ## 山積みの i 番目の位置（下の段から左詰め）
@@ -870,32 +879,37 @@ static func pile_pos(i: int, step: float, row_h: float) -> Vector2:
 
 func _update_bet_label() -> void:
 	lbl_credit.text = "CREDIT %d" % bet
-	# メダル1枚ごとにダイナマイトの詰まった箱が、画面下の受け皿に降ってきて積み重なる
-	var want: int = bet * STICKS_PER_COIN
-	while rack.size() > want:
-		rack.pop_back().queue_free()
+	# メダル1枚ごとに、クレーンが一回り大きい入れ物を吊ってきて、前のと入れ替わる
+	if bet < _pile_stage:
+		_clear_sticks()
 	var k: int = 0
-	while rack.size() < want:
-		var d: RigidBody2D = _make_stick(RACK_H, STICK_LAYER)
-		d.freeze = true   # 物理では転がさず、クレーンで決まった山の位置へ降ろす
-		var to: Vector2 = _crate_slot(rack.size(), RACK_H, Vector2(CENTER_X, RACK_Y))
-		_crate_depth(d, rack.size())
+	while _pile_stage < bet:
+		_pile_stage += 1
+		var n: int = _pile_stage
+		var h: float = STAGE_H[n - 1]
+		var d: RigidBody2D = _make_container(n, h, STICK_LAYER)
+		d.freeze = true
+		d.set_meta("stage", n)
 		add_child(d)
+		for o in rack:
+			_old_piles.append(o)
+		rack.clear()
 		rack.append(d)
-		_crane_drop(d, to, rack.size(), k * 0.08)
+		_crane_drop(d, Vector2(CENTER_X, RACK_Y - h / 2.0), n, k * 0.08)
 		k += 1
 
 
 ## クレーンのフックが上から箱を吊って降ろし、外して「ドスン」。n は何個目か
 func _crane_drop(d: RigidBody2D, to: Vector2, n: int, delay: float) -> void:
+	var h: float = STAGE_H[n - 1]
+	var ct: Texture2D = _stage_tex(n)
 	var hang: Vector2 = to + Vector2(0, -34)          # 外す直前の高さ
-	var start: Vector2 = to + Vector2(0, -760)
-	# チェーンは木箱のふちの両端にかける
-	var top_off: Vector2 = Vector2(0, -RACK_H / 2.0 + RACK_H * CRATE_RIM_Y - HOOK_CHAIN_H)
+	var start: Vector2 = to + Vector2(0, -820)
+	# チェーンは入れ物のふちの両端にかける
+	var top_off: Vector2 = Vector2(0, -h / 2.0 + h * float(STAGE_RIM.get(n, 0.2)) - HOOK_CHAIN_H)
 	d.position = start
 	var hook := CraneHook.new()
-	var ct: Texture2D = _tex["dynamite_crate"]
-	hook.chain_w = RACK_H * ct.get_width() / ct.get_height() * 0.92
+	hook.chain_w = h * ct.get_width() / ct.get_height() * 0.92
 	hook.chain_h = HOOK_CHAIN_H
 	hook.crate = d
 	hook.position = start + top_off
@@ -903,8 +917,8 @@ func _crane_drop(d: RigidBody2D, to: Vector2, n: int, delay: float) -> void:
 	add_child(hook)
 	# 着地点の影（箱が近づくほど濃く大きく）
 	var sh := DropShadow.new()
-	sh.position = Vector2(to.x, to.y + RACK_H * 0.48)
-	sh.w = RACK_H * 0.9
+	sh.position = Vector2(to.x, to.y + h * 0.48)
+	sh.w = h * ct.get_width() / ct.get_height() * 1.2
 	sh.k = 0.0
 	sh.z_index = 2
 	add_child(sh)
@@ -944,13 +958,15 @@ func _crate_thud(d: Node2D, at: Vector2, n: int) -> void:
 	# 積むほど低く重い音
 	Sfx.play_pitch("thud", 1.1 - n * 0.08, -2.0 + n * 1.0)
 	_squash(d)
-	_spark_burst(at + Vector2(0, -RACK_H * 0.45), n)
+	_swap_out_old(n, at)
+	var h: float = STAGE_H[n - 1]
+	_spark_burst(at + Vector2(0, -h * 0.45), n)
 	_react_to_crate(n)
 	# 土煙（左右にぽふっ）
 	for sx in [-1.0, 1.0]:
 		var sm := Sprite2D.new()
 		sm.texture = _tex["dust-cloud"]
-		sm.position = at + Vector2(sx * RACK_H * 0.45, RACK_H * 0.4)
+		sm.position = at + Vector2(sx * STAGE_H[n - 1] * 0.45, STAGE_H[n - 1] * 0.4)
 		sm.scale = Vector2(0.08, 0.08)
 		var big: float = 1.0 + 0.18 * (n - 1)   # 積むほど土煙も大きく
 		sm.flip_h = sx < 0.0
@@ -987,6 +1003,38 @@ func _land_crate(f: Sprite2D, i: int) -> void:
 	tw.tween_method(func(v: float) -> void:
 		f.scale = Vector2(base.x * (2.0 - v), base.y * v)
 		f.offset.y = half * (1.0 / v - 1.0), 0.75, 1.0, 0.25).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+
+
+## 前の段階の入れ物を「ボフン」と煙で消す（新しいのが上から乗った瞬間）
+func _swap_out_old(n: int, at: Vector2) -> void:
+	var keep: Array[Node2D] = []
+	for o in _old_piles:
+		if not is_instance_valid(o):
+			continue
+		if int(o.get_meta("stage", 0)) < n:
+			o.queue_free()
+		else:
+			keep.append(o)
+	_old_piles = keep
+	var poof := Sprite2D.new()
+	poof.texture = _tex["dust-cloud"]
+	poof.position = at + Vector2(0, -STAGE_H[n - 1] * 0.2)
+	poof.scale = Vector2(0.15, 0.15)
+	poof.z_index = 7
+	fx.add_child(poof)
+	var big: float = STAGE_H[n - 1] / 300.0 + 0.25
+	var tw := poof.create_tween().set_parallel(true)
+	tw.tween_property(poof, "scale", Vector2(big * 1.3, big), 0.25).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.tween_property(poof, "modulate:a", 0.0, 0.4).set_delay(0.1)
+	tw.chain().tween_callback(poof.queue_free)
+
+
+func _stage_tex(n: int) -> Texture2D:
+	var key: String = "stage_%d" % n
+	if not _tex.has(key):
+		var path: String = "res://assets/pile/stage_%d.png" % n
+		_tex[key] = load(path) if ResourceLoader.exists(path) else _tex["dynamite_crate"]
+	return _tex[key]
 
 
 ## 着地でグシャッと潰れて戻る（足元は固定）
@@ -1061,7 +1109,7 @@ func _reset_fear() -> void:
 
 ## 積むほど危ない：山がガタガタ震える（BET中に毎フレーム）
 func _rack_jitter() -> void:
-	var amp: float = maxf(0.0, float(rack.size() - 1)) * 1.1
+	var amp: float = maxf(0.0, float(_pile_stage - 1)) * 1.1
 	for d in rack:
 		var spr: Node2D = d.get_child(0)
 		spr.position = Vector2(randf_range(-amp, amp), randf_range(-amp * 0.4, amp * 0.4))
@@ -1091,7 +1139,12 @@ func _crate_depth(d: Node2D, i: int) -> void:
 
 ## ダイナマイト箱（当たり判定つき）。差してあるダイナマイトの導火線で火花がチラつく
 func _make_stick(h: float, layer: int) -> RigidBody2D:
-	var t: Texture2D = _tex["dynamite_crate"]
+	return _make_container(2, h, layer)
+
+
+## n 段階目の入れ物（当たり判定つき）。導火線の先で火花がチラつく
+func _make_container(n: int, h: float, layer: int) -> RigidBody2D:
+	var t: Texture2D = _stage_tex(n)
 	var sc: float = h / t.get_height()
 	var body := RigidBody2D.new()
 	body.collision_layer = layer
@@ -1113,7 +1166,8 @@ func _make_stick(h: float, layer: int) -> RigidBody2D:
 	cs.shape = rs
 	cs.position = Vector2(0, t.get_height() * 0.03 * sc)
 	body.add_child(cs)
-	for tip in CRATE_FUSES:
+	var fuses: Array = STAGE_FUSES.get(n, STAGE_FUSES[2] if t == _tex["dynamite_crate"] else [])
+	for tip in fuses:
 		var sp := FuseSpark.new()
 		sp.position = Vector2((tip.x - 0.5) * t.get_width(), (tip.y - 0.5) * t.get_height()) * sc
 		sp.size = h / 180.0
@@ -1125,6 +1179,11 @@ func _clear_sticks() -> void:
 	for d in rack:
 		d.queue_free()
 	rack.clear()
+	for o in _old_piles:
+		if is_instance_valid(o):
+			o.queue_free()
+	_old_piles.clear()
+	_pile_stage = 0
 	for d in base_sticks:
 		d.queue_free()
 	base_sticks.clear()
@@ -1266,45 +1325,40 @@ func _zoom() -> void:
 	cable_gen.visible = true
 	meter.visible = false   # 電気ゲージは出さない
 	cable.visible = true
-	# 画面下のダイナマイト箱が、1個ずつピョンと山なりに跳んでビルの足元へ積まれる
-	var flyers: Array[Sprite2D] = []
-	var bs: float = BASE_STICK_H / RACK_H
-	var last: Tween = null
-	for d in rack:
-		var f := Sprite2D.new()
+	# 画面下の入れ物が、山なりにピョンと跳んでビルの足元へ
+	for o in _old_piles:
+		if is_instance_valid(o):
+			o.queue_free()
+	_old_piles.clear()
+	if not rack.is_empty():
+		var d: RigidBody2D = rack[0]
+		var n: int = int(d.get_meta("stage", 1))
 		var src: Sprite2D = d.get_child(0)
+		var f := Sprite2D.new()
 		f.texture = src.texture
 		f.scale = src.scale
 		f.global_position = d.global_position
-		f.z_index = 3 if flyers.size() >= 3 else 4
+		f.z_index = 4
 		add_child(f)
-		var i: int = flyers.size()
-		flyers.append(f)
+		d.queue_free()
+		rack.clear()
+		var hb: float = STAGE_H[n - 1] * BASE_RATIO
 		var from: Vector2 = f.global_position
-		var to: Vector2 = _crate_slot(i, BASE_STICK_H, Vector2(CENTER_X, GROUND_Y + 4))
+		var to: Vector2 = Vector2(CENTER_X, GROUND_Y + 4 - hb / 2.0)
 		var sc0: Vector2 = src.scale
-		var sc1: Vector2 = src.scale * bs
-		var spin: float = deg_to_rad(randf_range(-14, 14))
+		var sc1: Vector2 = src.scale * BASE_RATIO
+		var spin: float = deg_to_rad(randf_range(-10, 10))
 		var jt := f.create_tween()
-		jt.tween_interval(i * FLY_GAP)
 		jt.tween_method(func(u: float) -> void:
 			f.global_position = from.lerp(to, u) + Vector2(0, -FLY_ARC * 4.0 * u * (1.0 - u))
 			f.scale = sc0.lerp(sc1, u)
-			f.rotation = spin * sin(u * PI), 0.0, 1.0, FLY_TIME).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-		jt.tween_callback(_land_crate.bind(f, i))
-		last = jt
-	for d in rack:
-		d.queue_free()
-	rack.clear()
-	if last != null:
-		await last.finished
+			f.rotation = spin * sin(u * PI), 0.0, 1.0, FLY_TIME + 0.08).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		jt.tween_callback(_land_crate.bind(f, n))
+		await jt.finished
 		await get_tree().create_timer(0.25).timeout
-	for f in flyers:
-		var b: RigidBody2D = _make_stick(BASE_STICK_H, PIECE_LAYER)
+		var b: RigidBody2D = _make_container(n, hb, PIECE_LAYER)
 		b.freeze = true
-		_crate_depth(b, base_sticks.size())
 		b.position = f.global_position
-		b.rotation = 0.0
 		add_child(b)
 		base_sticks.append(b)
 		f.queue_free()
