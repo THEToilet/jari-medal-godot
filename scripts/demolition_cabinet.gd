@@ -863,8 +863,9 @@ const FLY_GAP := 0.11          # 1個ずつ跳ぶ間隔
 const FLY_ARC := 170.0         # 跳ぶ高さ
 ## 入れ物の格上げ（メダル1枚目〜5枚目）。束 → 木箱 → 大きい木箱 → パレットの木枠 → コンテナ
 ## 絵は assets/pile/stage_<N>.png。無い段階は木箱の絵を大きさだけ変えて代用する
-const STAGE_H := [95.0, 135.0, 175.0, 215.0, 260.0]   # 画面下での表示の高さ
-const BASE_RATIO := 0.72                              # ビルの足元に置くときの縮み具合
+const STAGE_H := [90.0, 125.0, 160.0, 195.0, 235.0]   # 画面下での表示の高さ
+const BASE_RATIO := 0.62                              # ビルの足元に置くときの縮み具合
+const PILE_GAP := 8.0                                 # 並べるときのすき間
 ## 絵ごとの位置（0〜1）：チェーンをかける高さ、導火線の先。絵が届いたら合わせる
 const STAGE_RIM := {1: 0.35, 2: 0.437, 3: 0.46, 4: 0.47, 5: 0.26}
 const STAGE_FUSES := {
@@ -885,7 +886,7 @@ static func pile_pos(i: int, step: float, row_h: float) -> Vector2:
 
 func _update_bet_label() -> void:
 	lbl_credit.text = "CREDIT %d" % bet
-	# メダル1枚ごとに、クレーンが一回り大きい入れ物を吊ってきて、前のと入れ替わる
+	# メダル1枚ごとに、クレーンが一回り大きい入れ物を吊ってきて横に並べる（束 → … → コンテナ）
 	if bet < _pile_stage:
 		_clear_sticks()
 	var k: int = 0
@@ -897,12 +898,37 @@ func _update_bet_label() -> void:
 		d.freeze = true
 		d.set_meta("stage", n)
 		add_child(d)
-		for o in rack:
-			_old_piles.append(o)
-		rack.clear()
 		rack.append(d)
-		_crane_drop(d, Vector2(CENTER_X, RACK_Y - h / 2.0), n, k * 0.08)
+		# 並びを真ん中に寄せ直す（すでに置いてある分はスッと横へ）
+		var pos: Array[Vector2] = _pile_layout(rack.size(), 1.0, Vector2(CENTER_X, RACK_Y))
+		for i in rack.size() - 1:
+			var o: Node2D = rack[i]
+			var mv := o.create_tween().set_parallel(true).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			mv.tween_property(o, "position:x", pos[i].x, 0.25)
+			# まだ吊られている途中ならフックと影も一緒に
+			for key in ["hook", "shadow"]:
+				if o.has_meta(key):
+					mv.tween_property(o.get_meta(key), "position:x", pos[i].x, 0.25)
+		_crane_drop(d, pos[rack.size() - 1], n, k * 0.08)
 		k += 1
+
+
+## 並べた入れ物の中心位置。n 個を足元 base を中心に左から小さい順に並べる
+func _pile_layout(n: int, sc: float, base: Vector2) -> Array[Vector2]:
+	var ws: Array[float] = []
+	var total: float = 0.0
+	for i in n:
+		var t: Texture2D = _stage_tex(i + 1)
+		var w: float = STAGE_H[i] * sc * t.get_width() / t.get_height()
+		ws.append(w)
+		total += w
+	total += PILE_GAP * sc * (n - 1)
+	var out: Array[Vector2] = []
+	var x: float = base.x - total / 2.0
+	for i in n:
+		out.append(Vector2(x + ws[i] / 2.0, base.y - STAGE_H[i] * sc / 2.0))
+		x += ws[i] + PILE_GAP * sc
+	return out
 
 
 ## クレーンのフックが上から箱を吊って降ろし、外して「ドスン」。n は何個目か
@@ -929,13 +955,16 @@ func _crane_drop(d: RigidBody2D, to: Vector2, n: int, delay: float) -> void:
 	sh.k = 0.0
 	sh.z_index = 2
 	add_child(sh)
+	d.set_meta("hook", hook)
+	d.set_meta("shadow", sh)
 	var tw := d.create_tween()
 	tw.tween_interval(delay)
 	tw.tween_callback(Sfx.play_pitch.bind("crane", randf_range(0.95, 1.05), -6.0))
 	tw.set_parallel(true)
 	tw.tween_property(sh, "k", 0.75, HOOK_DOWN)
-	tw.tween_property(d, "position", hang, HOOK_DOWN).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.tween_property(hook, "position", hang + top_off, HOOK_DOWN).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	# 縦だけ動かす（横は並べ直しで動くことがあるので別にする）
+	tw.tween_property(d, "position:y", hang.y, HOOK_DOWN).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(hook, "position:y", hang.y + top_off.y, HOOK_DOWN).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	# 吊られて少し揺れる
 	tw.tween_property(d, "rotation", deg_to_rad(4), HOOK_DOWN * 0.5)
 	tw.set_parallel(false)
@@ -946,11 +975,14 @@ func _crane_drop(d: RigidBody2D, to: Vector2, n: int, delay: float) -> void:
 		hook.attached = false
 		Sfx.play_pitch("chain", randf_range(0.9, 1.1), -8.0))
 	tw.set_parallel(true)
-	tw.tween_property(d, "position", to, 0.1).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.tween_property(d, "position:y", to.y, 0.1).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	tw.tween_property(sh, "k", 1.0, 0.1)
 	tw.set_parallel(false)
-	tw.tween_callback(_crate_thud.bind(d, to, n))
-	tw.tween_callback(sh.queue_free)
+	tw.tween_callback(func() -> void: _crate_thud(d, Vector2(d.position.x, to.y), n))
+	tw.tween_callback(func() -> void:
+		d.remove_meta("shadow")
+		d.remove_meta("hook")
+		sh.queue_free())
 	# フックは上へ戻って消える
 	var up := hook.create_tween()
 	up.tween_interval(delay + HOOK_DOWN + 0.18)
@@ -965,7 +997,6 @@ func _crate_thud(d: Node2D, at: Vector2, n: int) -> void:
 	# 積むほど低く重い音
 	Sfx.play_pitch("thud", 1.1 - n * 0.08, -2.0 + n * 1.0)
 	_squash(d)
-	_swap_out_old(n, at)
 	var h: float = STAGE_H[n - 1]
 	_spark_burst(at + Vector2(0, -h * 0.45), n)
 	_react_to_crate(n)
@@ -1089,7 +1120,7 @@ func _react_to_crate(n: int) -> void:
 	ft.tween_property(plunger, "position:y", PLUNGER_Y - hop, 0.09).set_ease(Tween.EASE_OUT)
 	ft.tween_property(plunger, "position:y", PLUNGER_Y, 0.16).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
 	_fear = n
-	sweat.level = n - 2        # 3個目から汗
+	sweat.level = n - 3        # 4個目から汗（控えめ）
 	# ビクッ
 	var wt := worker.create_tween()
 	wt.tween_property(worker, "position:x", WORKER_POS.x - 10.0 - n * 2.0, 0.05)
@@ -1332,13 +1363,12 @@ func _zoom() -> void:
 	cable_gen.visible = true
 	meter.visible = false   # 電気ゲージは出さない
 	cable.visible = true
-	# 画面下の入れ物が、山なりにピョンと跳んでビルの足元へ
-	for o in _old_piles:
-		if is_instance_valid(o):
-			o.queue_free()
-	_old_piles.clear()
-	if not rack.is_empty():
-		var d: RigidBody2D = rack[0]
+	# 並べた入れ物が、小さい順に1個ずつ山なりにピョンと跳んでビルの足元へ
+	var dest: Array[Vector2] = _pile_layout(rack.size(), BASE_RATIO, Vector2(CENTER_X, GROUND_Y + 4))
+	var flyers: Array[Sprite2D] = []
+	var last: Tween = null
+	for i in rack.size():
+		var d: RigidBody2D = rack[i]
 		var n: int = int(d.get_meta("stage", 1))
 		var src: Sprite2D = d.get_child(0)
 		var f := Sprite2D.new()
@@ -1346,24 +1376,31 @@ func _zoom() -> void:
 		f.scale = src.scale
 		f.global_position = d.global_position
 		f.z_index = 4
+		f.set_meta("stage", n)
 		add_child(f)
-		d.queue_free()
-		rack.clear()
-		var hb: float = STAGE_H[n - 1] * BASE_RATIO
+		flyers.append(f)
 		var from: Vector2 = f.global_position
-		var to: Vector2 = Vector2(CENTER_X, GROUND_Y + 4 - hb / 2.0)
+		var to: Vector2 = dest[i]
 		var sc0: Vector2 = src.scale
 		var sc1: Vector2 = src.scale * BASE_RATIO
-		var spin: float = deg_to_rad(randf_range(-10, 10))
+		var spin: float = deg_to_rad(randf_range(-12, 12))
 		var jt := f.create_tween()
+		jt.tween_interval(i * FLY_GAP)
 		jt.tween_method(func(u: float) -> void:
 			f.global_position = from.lerp(to, u) + Vector2(0, -FLY_ARC * 4.0 * u * (1.0 - u))
 			f.scale = sc0.lerp(sc1, u)
-			f.rotation = spin * sin(u * PI), 0.0, 1.0, FLY_TIME + 0.08).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-		jt.tween_callback(_land_crate.bind(f, n))
-		await jt.finished
+			f.rotation = spin * sin(u * PI), 0.0, 1.0, FLY_TIME).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		jt.tween_callback(_land_crate.bind(f, i))
+		last = jt
+	for d in rack:
+		d.queue_free()
+	rack.clear()
+	if last != null:
+		await last.finished
 		await get_tree().create_timer(0.25).timeout
-		var b: RigidBody2D = _make_container(n, hb, PIECE_LAYER)
+	for f in flyers:
+		var n: int = int(f.get_meta("stage", 1))
+		var b: RigidBody2D = _make_container(n, STAGE_H[n - 1] * BASE_RATIO, PIECE_LAYER)
 		b.freeze = true
 		b.position = f.global_position
 		add_child(b)

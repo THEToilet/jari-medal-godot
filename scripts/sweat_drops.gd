@@ -16,13 +16,13 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
-	var n: int = clampi(level, 0, 3)
+	var n: int = clampi(level, 0, 2)
 	# 頭の右上・左上にしずく。ぴょこぴょこ揺れる
 	var spots := [Vector2(95, -45), Vector2(-80, -30), Vector2(-95, 20)]
 	for i in n:
-		var ph: float = fmod(_t * (1.6 + 0.5 * level) + i * 0.37, 1.0)
+		var ph: float = fmod(_t * (0.9 + 0.3 * level) + i * 0.5, 1.0)
 		var p: Vector2 = spots[i] + Vector2(signf(spots[i].x) * ph * 12.0, ph * 18.0)
-		var sz: float = 20.0 + i * 3.0
+		var sz: float = 14.0 + i * 2.0
 		_drop(p, sz, deg_to_rad(signf(spots[i].x) * 25.0), 1.0 - ph * 0.5)
 
 
