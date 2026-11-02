@@ -924,7 +924,7 @@ const HOOK_DOWN := 0.42        # フックが降りてくる時間
 const FLY_TIME := 0.42         # 箱がビルの足元へ跳ぶ時間
 const FLY_GAP := 0.11          # 1個ずつ跳ぶ間隔
 const FLY_ARC := 170.0         # 跳ぶ高さ
-const WIRE_RUN := 0.55         # 発破線が伸びる時間
+const WIRE_RUN := 0.35         # 発破線が伸びる時間
 ## 入れ物の格上げ（メダル1枚目〜5枚目）。束 → 木箱 → 大きい木箱 → パレットの木枠 → コンテナ
 ## 絵は assets/pile/stage_<N>.png。無い段階は木箱の絵を大きさだけ変えて代用する
 const STAGE_H := [100.0, 145.0, 195.0, 250.0, 320.0]   # 画面下での表示の高さ
@@ -992,9 +992,9 @@ func _run_wire() -> void:
 	var segs: int = maxi(links.anchors.size() - 1, 0)
 	if segs > 0:
 		var lt := create_tween()
-		lt.tween_property(links, "reveal", 1.0, 0.12 * segs + 0.05)
+		lt.tween_property(links, "reveal", 1.0, 0.07 * segs + 0.03)
 		await lt.finished
-	await get_tree().create_timer(0.2).timeout
+	await get_tree().create_timer(0.1).timeout
 
 
 ## 起爆器からの発破線を、足元に並べたダイナマイトのいちばん右（いちばん大きい）につなぐ。
@@ -1185,6 +1185,16 @@ func _stage_tex(n: int) -> Texture2D:
 	return _tex[key]
 
 
+## 電気が届いた瞬間、足元のダイナマイトの導火線に一斉に火がつく
+func _light_fuses() -> void:
+	for b in base_sticks:
+		if not is_instance_valid(b):
+			continue
+		for c in b.get_children():
+			if c is FuseSpark:
+				(c as FuseSpark).lit = true
+
+
 ## 着地でグシャッと潰れて戻る（足元は固定）
 func _squash(d: Node2D) -> void:
 	if not is_instance_valid(d):
@@ -1213,9 +1223,10 @@ func _spark_burst(at: Vector2, n: int) -> void:
 	p.gravity = Vector2(0, 900)
 	p.scale_amount_min = 4.0
 	p.scale_amount_max = 8.0
+	# 火花ではなく土ぼこりと木くず（まだ火はついていない）
 	var g := Gradient.new()
-	g.set_color(0, Color(1, 1, 0.7))
-	g.set_color(1, Color(1, 0.45, 0.1, 0))
+	g.set_color(0, Color(0.85, 0.72, 0.5))
+	g.set_color(1, Color(0.55, 0.42, 0.3, 0))
 	p.color_ramp = g
 	p.z_index = 8
 	fx.add_child(p)
@@ -1475,7 +1486,7 @@ func _zoom() -> void:
 	cable_gen.visible = true
 	# 発電機→起爆器の線は、寄ったあとにスルスルと伸びてくる
 	cable_gen.grow = 0.0
-	create_tween().tween_property(cable_gen, "grow", 1.0, 0.5).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	create_tween().tween_property(cable_gen, "grow", 1.0, 0.35).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	meter.visible = false   # 電気ゲージは出さない
 	# 起爆器→ダイナマイトの線は、ダイナマイトを置いてから伸ばす
 	cable.visible = false
@@ -1701,6 +1712,7 @@ func _detonate() -> void:
 	Sfx.play("tap", 0.0, 0.05)
 	var surge := create_tween()
 	surge.tween_property(cable, "power", 1.0, 0.12)
+	surge.tween_callback(_light_fuses)
 	surge.tween_interval(0.35)
 	await surge.finished
 	create_tween().tween_property(cable, "power", 0.0, 0.3)
@@ -2068,8 +2080,14 @@ class DemolitionCabinetPile:
 class FuseSpark extends Node2D:
 	var size: float = 1.0
 	var _acc: float = randf() * 0.07
+	var lit: bool = false     # 起爆するまでは火をつけない
 
 	func _process(delta: float) -> void:
+		if not lit:
+			if visible:
+				visible = false
+			return
+		visible = true
 		# ちらつきは1秒に15回くらいで十分（毎フレーム描き直すと重い）
 		_acc += delta
 		if _acc >= 0.066:
