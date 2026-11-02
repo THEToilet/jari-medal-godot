@@ -115,6 +115,10 @@ var title_logo: Sprite2D
 ## 待機画面のタイトルロゴ（中心位置と表示幅）
 const TITLE_POS := Vector2(960, 370)
 const TITLE_W := 1100.0
+## タイトルは起動直後と、待機のまましばらく放置されたときだけ出す
+const TITLE_IDLE := 15.0
+var _title_boot: bool = true
+var _wait_t: float = 0.0
 var rack: Array[RigidBody2D] = []        # ベットするごとに画面下に降ってくるダイナマイト（物理）
 var base_sticks: Array[RigidBody2D] = []  # ビルの足元に仕掛けたダイナマイト（物理）
 var marker: SelectMarker
@@ -1203,7 +1207,14 @@ func _on_tap() -> void:
 func _process(delta: float) -> void:
 	super(delta)
 	if title_logo:
-		title_logo.visible = insert_sign.visible   # 待機中だけ出す
+		if state == S.WAIT:
+			_wait_t += delta
+		else:
+			_wait_t = 0.0
+			_title_boot = false
+		var want: bool = state == S.WAIT and (_title_boot or _wait_t > TITLE_IDLE)
+		title_logo.modulate.a = move_toward(title_logo.modulate.a, 1.0 if want else 0.0, delta * 3.0)
+		title_logo.visible = title_logo.modulate.a > 0.0
 	if _shake_amt > 0.0:
 		cam.offset = Vector2(randf_range(-1, 1), randf_range(-1, 1)) * _shake_amt
 	else:
