@@ -566,6 +566,7 @@ func _reset() -> void:
 	lbl_timer.text = ""
 	fuse.visible = false
 	btn_hint.visible = false
+	_hide_mash_text()
 	lbl_big.visible = false
 	lbl_payout.visible = false
 	_build_strip()
@@ -1095,7 +1096,9 @@ func _start_charge() -> void:
 	# ボタン連打の合図
 	btn_hint.interval = 0.6
 	btn_hint.size_px = 400.0
+	btn_hint.reset()
 	btn_hint.visible = true
+	_show_mash_text()
 	_pose(foreman, "chara/foreman_1")
 	Sfx.hum_level = 0.3
 
@@ -1104,6 +1107,8 @@ func _on_tap() -> void:
 	power = minf(power + POWER_PER_TAP, 1.0)
 	dynamo.kick()
 	Sfx.play("tap", 0.0, 0.05)
+	btn_hint.press()
+	_bump_mash_text()
 	# 押すたびに作業員が発電機のハンドルを1コマ回す
 	if not _crank_frames.is_empty():
 		_crank_phase += 1.0
@@ -1151,6 +1156,7 @@ func _process(delta: float) -> void:
 # ---------------------------------------------------------------- DETONATE
 
 func _enter_detonate() -> void:
+	_hide_mash_text()
 	lbl_timer.text = ""
 	fuse.visible = false
 	btn_hint.visible = false
@@ -1434,6 +1440,42 @@ func _big(text: String, color: Color, key: String = "") -> void:
 	lbl_big.rotation = deg_to_rad(-6)
 	lbl_big.scale = Vector2(0.3, 0.3)
 	create_tween().tween_property(lbl_big, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+## 連打フェーズの「れんだ！」文字。押すたびにポンと弾む
+const MASH_POS := Vector2(960, 250)
+const MASH_H := 190.0
+var mash_text: Sprite2D
+var _mash_base: float = 1.0
+
+
+func _show_mash_text() -> void:
+	if mash_text == null:
+		var tp: String = "res://assets/text/charge.png"
+		if not ResourceLoader.exists(tp):
+			return
+		mash_text = Sprite2D.new()
+		mash_text.texture = load(tp)
+		mash_text.position = MASH_POS
+		_mash_base = MASH_H / mash_text.texture.get_height()
+		ui.add_child(mash_text)
+	mash_text.visible = true
+	mash_text.rotation = deg_to_rad(-5)
+	mash_text.scale = Vector2.ONE * _mash_base * 0.3
+	create_tween().tween_property(mash_text, "scale", Vector2.ONE * _mash_base, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+func _bump_mash_text() -> void:
+	if mash_text == null or not mash_text.visible:
+		return
+	mash_text.scale = Vector2.ONE * _mash_base * 1.12
+	mash_text.rotation = deg_to_rad(randf_range(-8, -2))
+	create_tween().tween_property(mash_text, "scale", Vector2.ONE * _mash_base, 0.12)
+
+
+func _hide_mash_text() -> void:
+	if mash_text:
+		mash_text.visible = false
 
 
 func _press_anim(s: Sprite2D) -> void:

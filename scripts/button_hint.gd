@@ -17,6 +17,27 @@ var _frames: Array[Texture2D] = []
 var _t: float = 0.0
 var _last: int = 0
 var _rings: Array[float] = []
+var _since_press: float = 99.0
+## 最後に押されてからこの秒数は「押したら凹む」だけ。それを過ぎたら自動で押して促す
+const IDLE_AUTO := 1.2
+const PRESS_HOLD := 0.09
+
+
+## プレイヤーがボタンを押した瞬間に呼ぶ（凹ませて輪を出す）
+func press() -> void:
+	_since_press = 0.0
+	_rings.append(0.0)
+
+
+func reset() -> void:
+	_since_press = 99.0
+	_t = 0.0
+
+
+func _cur() -> int:
+	if _since_press < IDLE_AUTO:
+		return 1 if _since_press < PRESS_HOLD else 0
+	return _frame_at(fmod(_t, interval) / interval)
 
 
 func _ready() -> void:
@@ -38,8 +59,10 @@ func _process(delta: float) -> void:
 	if not visible:
 		return
 	_t += delta
-	var f: int = _frame_at(fmod(_t, interval) / interval)
-	if f == 1 and _last != 1:
+	_since_press += delta
+	var auto: bool = _since_press >= IDLE_AUTO
+	var f: int = _cur()
+	if auto and f == 1 and _last != 1:
 		_rings.append(0.0)       # 底まで押した瞬間
 	_last = f
 	var alive: Array[float] = []
@@ -53,7 +76,7 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	if _frames.is_empty():
 		return
-	var t: Texture2D = _frames[mini(USE[_frame_at(fmod(_t, interval) / interval)], _frames.size() - 1)]
+	var t: Texture2D = _frames[mini(USE[_cur()], _frames.size() - 1)]
 	var w: float = size_px
 	var h: float = w * t.get_height() / t.get_width()
 	# 衝撃の輪（土台のまわりに広がる）
