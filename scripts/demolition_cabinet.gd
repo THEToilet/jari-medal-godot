@@ -129,6 +129,7 @@ const TITLE_IDLE := 15.0
 var _title_boot: bool = true
 var _wait_t: float = 0.0
 var _medals_txt: String = ""
+var debug_pattern: String = ""   # テスト用：煽りパターンを固定
 var _result_lock: bool = false   # リザルト表示中はメダルを受け付けない
 ## メダルを入れたのに選ばないまましばらく経ったら、選び方の案内を出す
 const SELECT_HINT_AFTER := 6.0
@@ -609,6 +610,7 @@ func _reset() -> void:
 	cable_gen.visible = false   # 選ぶ間は出さない（並べたダイナマイトにかぶるので）
 	charge_box.visible = false
 	plunger.position = Vector2(PLUNGER_X, PLUNGER_Y)
+	plunger.rotation = 0.0
 	_layout_gen_cable()
 	plunger.modulate = Color.WHITE
 	_set_push_frame(0)
@@ -1751,7 +1753,7 @@ func chance(d: Dictionary, bombs: int, pw: float) -> float:
 
 func _play_result(win: bool) -> void:
 	var k: float = time_scale * float(chosen.data.get("tempo", 1.0))
-	var pat: String = _weighted(PATTERNS[win])
+	var pat: String = _weighted(PATTERNS[win]) if debug_pattern == "" else debug_pattern
 	_pose(foreman, "chara/foreman_3")
 	_crowd = 1.0
 	await _explode()
@@ -1780,10 +1782,12 @@ func _play_result(win: bool) -> void:
 			chosen.set_crack(0.9, t_tilt * k)
 			await chosen.tilt(15.0, t_tilt * k * 1.3).finished
 			await get_tree().create_timer(0.25 * k).timeout
-			var back := chosen.tilt(2.0, t_clear * k)
+			var back := chosen.tilt(0.0, t_clear * k)
 			back.set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
 			await back.finished
 			await _smoke_clear(t_clear * k)
+			# 持ちこたえたビルのてっぺんから、かけらが1つだけポロッ…
+			await _top_chunk_falls()
 		"solid":
 			chosen.set_shake(4.0)
 			Sfx.play("rumble", 0.0, t_tilt * k * 1.2)
@@ -1822,14 +1826,68 @@ func _play_result(win: bool) -> void:
 		return
 	else:
 		_say("")
-		_big("しっぱい……", Color(0.5, 0.75, 1.0), "lose")
-		Sfx.play("beep", 220.0, 0.4)
+		if pat == "near_miss":
+			_big("おしい……！", Color(1.0, 0.75, 0.2))
+		else:
+			_big("しっぱい……", Color(0.5, 0.75, 1.0), "lose")
+		Sfx.play_pitch("lose", 1.0, -2.0)
 		_pose(foreman, "chara/foreman_5")
-		pass
 		_crowd = 0.0
+		_zukkoke()
+		# ビルは「えっへん」と胸を張る
+		var bt := chosen.create_tween()
+		bt.tween_property(chosen, "scale", chosen.scale * Vector2(1.04, 1.06), 0.15)
+		bt.tween_property(chosen, "scale", chosen.scale, 0.3).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
 		_cut_in("chara/bust_2", 1.0)
-	await get_tree().create_timer(0.6 if win else 1.5).timeout
+	await get_tree().create_timer(0.6 if win else 2.0).timeout
 	_end(payout)
+
+
+## 失敗：監督が起爆器ごとズッコける
+func _zukkoke() -> void:
+	var tw := plunger.create_tween()
+	tw.tween_interval(0.35)
+	tw.tween_property(plunger, "position:y", PLUNGER_Y - 40.0, 0.12).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(plunger, "rotation_degrees", 28.0, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(plunger, "position:y", PLUNGER_Y, 0.15).set_ease(Tween.EASE_IN)
+	tw.tween_callback(func() -> void:
+		_shake(6.0, 0.15)
+		Sfx.play_pitch("thud", 1.3, -4.0))
+	tw.tween_interval(1.0)
+	tw.tween_property(plunger, "rotation_degrees", 0.0, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+## 惜しかったとき：てっぺんのかけらが1つだけ落ちて、ポテッ、コロコロ
+func _top_chunk_falls() -> void:
+	var t: Texture2D = chosen.tex
+	var sc: float = chosen.scale.x
+	var h: float = chosen.size().y * sc
+	var c := Sprite2D.new()
+	c.texture = t
+	c.region_enabled = true
+	var cw: float = minf(110.0, t.get_width() * 0.3)
+	c.region_rect = Rect2(t.get_width() * 0.55, 0, cw, cw * 0.8)
+	c.scale = Vector2(sc, sc) * 1.2
+	var from := Vector2(CENTER_X + chosen.size().x * sc * 0.1, GROUND_Y - h + 10.0)
+	var to := Vector2(from.x + 70.0, GROUND_Y - 8.0)
+	c.position = from
+	c.z_index = 7
+	fx.add_child(c)
+	chosen.set_shake(1.5)
+	await get_tree().create_timer(0.35).timeout
+	chosen.set_shake(0.0)
+	Sfx.play_pitch("plink", 1.0, 0.0)
+	var tw := c.create_tween()
+	tw.tween_property(c, "position", to, clampf(h / 900.0, 0.3, 0.7)).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.parallel().tween_property(c, "rotation", 3.0, 0.6)
+	tw.tween_property(c, "position", to + Vector2(30, -26), 0.12).set_ease(Tween.EASE_OUT)
+	tw.tween_property(c, "position", to + Vector2(50, 0), 0.12).set_ease(Tween.EASE_IN)
+	tw.tween_property(c, "position", to + Vector2(62, -8), 0.07)
+	tw.tween_property(c, "position", to + Vector2(70, 0), 0.07)
+	tw.tween_interval(2.5)
+	tw.tween_property(c, "modulate:a", 0.0, 0.4)
+	tw.tween_callback(c.queue_free)
+	await get_tree().create_timer(0.6).timeout
 
 
 ## リザルトのファンファーレ（ランクが上がるほど長い）
