@@ -10,7 +10,7 @@ extends Node3D
 const GAME_SCENE := preload("res://scenes/main.tscn")
 const CRT := preload("res://virtual/crt_screen.gdshader")
 const CABINET_SCENE := preload("res://virtual/jari_cabinet.glb")
-const CAMERA_OFFSET := Vector3(0, 0.32, 1.5)       # 画面とボタンの間から見た、カメラの位置（立って覗き込むくらい）
+const CAMERA_OFFSET := Vector3(0, 0.17, 0.98)      # 画面とボタンの間から見た、カメラの位置（立って覗き込むくらい）
 const NEIGHBOR_X := [-1.32, -0.66, 0.66, 1.32]     # 両隣の筐体の位置（幅60cm＋すき間6cm）
 const NEIGHBOR_SCREENS := ["res://assets/bg.png", "res://assets/splash.png", "res://assets/result/burst_gold.png", "res://assets/bg.png"]
 
