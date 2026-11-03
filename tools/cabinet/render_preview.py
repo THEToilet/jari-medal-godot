@@ -21,7 +21,8 @@ def walk(n, R, T):
 walk(B.root, np.eye(3), np.zeros(3))
 
 # カメラ
-target = np.array([0, 0.80, 0]); dist = 2.9; pitch = 8
+import os
+target = np.array([float(x) for x in os.environ.get("TARGET", "0,0.80,0").split(",")]); dist = float(os.environ.get("DIST", 2.9)); pitch = float(os.environ.get("PITCH", 8))
 ty, tp = math.radians(yaw), math.radians(pitch)
 eye = target + dist * np.array([math.sin(ty) * math.cos(tp), math.sin(tp), math.cos(ty) * math.cos(tp)])
 f = target - eye; f /= np.linalg.norm(f); r = np.cross(f, [0, 1, 0]); r /= np.linalg.norm(r); u = np.cross(r, f)
