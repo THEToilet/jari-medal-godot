@@ -1,7 +1,7 @@
 name: Web版をGitHub Pagesに公開
 
 # ルート … main の Web 版（2D）
-# /virtual/ … 仮想筐体（3D）。VIRTUAL_BRANCH があればそのブランチから、無ければ main から作る
+# /virtual/ … 仮想筐体（3D）。VIRTUAL_BRANCH にブランチ名を入れるとそのブランチから、空なら main から作る
 #             （書き出し設定「Web Virtual」が無ければ作らない）
 # VIRTUAL_BRANCH に push したときは preview-trigger.yml がこのワークフローを main で動かす
 
@@ -21,7 +21,7 @@ concurrency:
 
 env:
   GODOT_VERSION: 4.6.3
-  VIRTUAL_BRANCH: feature/virtual-cabinet
+  VIRTUAL_BRANCH: ""   # 例: feature/virtual-cabinet（ブランチで試すときだけ入れる。preview-trigger.yml の branches も合わせる）
 
 jobs:
   build:
@@ -31,7 +31,7 @@ jobs:
 
       - name: 仮想筐体のブランチを取得（あれば）
         run: |
-          if git ls-remote --exit-code --heads origin "$VIRTUAL_BRANCH" > /dev/null; then
+          if [ -n "$VIRTUAL_BRANCH" ] && git ls-remote --exit-code --heads origin "$VIRTUAL_BRANCH" > /dev/null; then
             git fetch --depth 1 origin "$VIRTUAL_BRANCH"
             git worktree add "$RUNNER_TEMP/virtual" FETCH_HEAD
             echo "VIRTUAL_DIR=$RUNNER_TEMP/virtual" >> "$GITHUB_ENV"
