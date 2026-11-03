@@ -20,7 +20,7 @@ main ブランチに push すると、GitHub Actions が Web 版を書き出し�
 | 操作 | 仮想筐体 |
 |---|---|
 | メダル投入 | 右上の「メダル」ボタン、または C |
-| ボタン | それ以外のどこかをクリック/タップ、または Space / Enter |
+| ボタン | ボタンが乗っている板（かボタン）をクリック/タップ、または Space / Enter |
 
 筐体モデル（`virtual/jari_cabinet.glb`）は `tools/cabinet/build_cabinet.py` で生成している（numpy のみ）。形や色を変えるときはそちらを直して `python3 tools/cabinet/build_cabinet.py` を実行する。詳しくは `tools/cabinet/README.md`。
 

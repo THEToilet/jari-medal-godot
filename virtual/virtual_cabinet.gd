@@ -4,7 +4,7 @@ extends Node3D
 ## ゲーム側には手を入れず、筐体と同じ入出力だけでつなぐ。
 ##  - 入力：ボタン → InputMap "tap"、メダル投入 → "coin" を SubViewport に流す
 ##  - 出力：ゲームの finished(払い出し枚数) → LED を光らせる
-## 操作：画面のどこかをクリック/タップ ＝ ボタン、右上の「メダル」ボタン ＝ メダル投入
+## 操作：ボタンが乗っている板（かボタン）をクリック/タップ ＝ ボタン、右上の「メダル」ボタン ＝ メダル投入
 ##       キーボードは Space/Enter ＝ ボタン、C ＝ メダル投入（2D版と同じ）、F2 ＝ メダル補充（デバッグ）
 
 const GAME_SCENE := preload("res://scenes/main.tscn")
@@ -26,11 +26,16 @@ var _neighbor_leds: Array[StandardMaterial3D] = []
 var _win_left := 0.0
 var _t := 0.0
 var _tap_down := false
+var _deck: MeshInstance3D
 
 
 func _ready() -> void:
 	_button_cap = cabinet.find_child("ButtonCap", true, false)
 	_cap_rest = _button_cap.position
+	# ボタンの当たり判定：ボタンが乗っている板とボタン本体
+	_deck = cabinet.find_child("ShellDeck", true, false)
+	_deck.create_trimesh_collision()
+	_button_cap.create_convex_collision()
 
 	# 自分の筐体：画面にゲームを映す（ブラウン管風のシェーダー越し）
 	_led_mat = _dress_cabinet(cabinet, game_viewport.get_texture())
@@ -193,12 +198,23 @@ func _unhandled_input(e: InputEvent) -> void:
 		game_viewport.push_input(e)
 		get_viewport().set_input_as_handled()
 	elif e is InputEventMouseButton and e.button_index == MOUSE_BUTTON_LEFT:
-		# 右上のボタン以外はどこを押してもボタン扱い（スマホのタップもマウスとして届く）
+		# ボタンが乗っている板かボタンを押したときだけボタン扱い（スマホのタップもマウスとして届く）
 		if e.pressed:
-			_tap(true)
+			if _hits_button_area(e.position):
+				_tap(true)
 		elif _tap_down:
 			_tap(false)
 		get_viewport().set_input_as_handled()
+
+
+func _hits_button_area(pos: Vector2) -> bool:
+	var from := camera.project_ray_origin(pos)
+	var to := from + camera.project_ray_normal(pos) * 10.0
+	var hit := get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(from, to))
+	if hit.is_empty():
+		return false
+	var owner_mesh: Node = (hit.collider as Node).get_parent()
+	return owner_mesh == _deck or owner_mesh == _button_cap
 
 
 func _tap(down: bool) -> void:
