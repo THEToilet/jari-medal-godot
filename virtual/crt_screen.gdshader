@@ -7,13 +7,13 @@ uniform float curvature : hint_range(0.0, 0.3) = 0.09;          // 画面のふ�
 uniform float corner : hint_range(0.0, 0.2) = 0.06;             // 角の丸み
 uniform float scanline_count = 240.0;                           // 走査線の本数（上限。画面が小さく映るときは自動で減らす）
 uniform float scanline_min_px = 3.0;                            // 走査線1本あたりの最小の太さ（px）
-uniform float scanline_strength : hint_range(0.0, 1.0) = 0.38;
-uniform float mask_strength : hint_range(0.0, 1.0) = 0.22;
-uniform float aberration : hint_range(0.0, 0.01) = 0.0016;      // 色のにじみ（左右ずれ）
-uniform float bleed : hint_range(0.0, 1.0) = 0.25;              // 明るいところのにじみ
-uniform float vignette : hint_range(0.0, 1.0) = 0.35;           // 周辺の暗さ
-uniform float brightness : hint_range(0.5, 2.0) = 1.18;         // 走査線で暗くなるぶんの持ち上げ
-uniform float flicker : hint_range(0.0, 0.1) = 0.012;           // ちらつき
+uniform float scanline_strength : hint_range(0.0, 1.0) = 0.2;
+uniform float mask_strength : hint_range(0.0, 1.0) = 0.08;
+uniform float aberration : hint_range(0.0, 0.01) = 0.0007;      // 色のにじみ（左右ずれ）
+uniform float bleed : hint_range(0.0, 1.0) = 0.15;              // 明るいところのにじみ
+uniform float vignette : hint_range(0.0, 1.0) = 0.25;           // 周辺の暗さ
+uniform float brightness : hint_range(0.5, 2.0) = 1.08;         // 走査線で暗くなるぶんの持ち上げ
+uniform float flicker : hint_range(0.0, 0.1) = 0.004;           // ちらつき
 uniform float glass : hint_range(0.0, 0.3) = 0.05;              // ガラスの映り込み
 
 vec2 warp(vec2 uv) {

@@ -9,18 +9,18 @@ main ブランチに push すると、GitHub Actions が Web 版を書き出し�
 ## 仮想筐体（3D）
 `virtual/virtual_cabinet.tscn` は、ゲーム（`scenes/main.tscn`）を3Dの筐体の画面に映して遊ぶシーン。GitHub Pages では `/virtual/` に置く（ルートは今までどおり2D）。書き出し設定「Web Virtual」（カスタム機能 `virtual_cabinet` → `run/main_scene.virtual_cabinet`）で書き出す。PCの `play.bat` や実機は2Dのまま。
 
-- Pages：`pages.yml` が main の2Dをルートに、`feature/virtual-cabinet` ブランチ（無ければ main）の仮想筐体を `/virtual/` に書き出す。ブランチに push したときは `preview-trigger.yml` が main の公開を動かす
+- Pages：`pages.yml` が main の2Dをルートに、仮想筐体を `/virtual/` に書き出す（`VIRTUAL_BRANCH` にブランチ名を入れるとそのブランチから作る）
 - 画面はブラウン管風のシェーダー（`virtual/crt_screen.gdshader`：ふくらみ・走査線・RGBの縦じま・色ずれ・にじみ・周辺減光）。強さは uniform で調整
 
 - ゲームは SubViewport の中で動かしていて、筐体のボタン → `tap`、投入口 → `coin` を流し込むだけ。ゲーム側には `is_in_play()` を足したのと、筐体の画面の中ではスマホ用の投入ボタンを出さないようにした以外、手を入れていない
-- ゲームの `finished(払い出し枚数)` を受けて、払い出し口のくぼみにメダルを物理で落とす
-- カメラは待機中＝全体、プレイ中＝画面とボタン、払い出し中＝受け皿に自動で切り替わる
+- 舞台は「人のいないショッピングモールの角のゲームコーナー」：蛍光灯、リノリウムの床（`virtual/linoleum.gdshader`）、うしろの壁、両隣にも同じ筐体（画面は止まった絵）
+- カメラは固定（画面とボタンが近くに見える位置。`CAMERA_OFFSET` で調整）
+- ゲームの `finished(払い出し枚数)` を受けて LED を点滅させる
 
 | 操作 | 仮想筐体 |
 |---|---|
-| メダル投入 | 投入口をクリック/タップ、または C |
-| ボタン | 投入口以外のどこかをクリック/タップ、または Space / Enter |
-| 払い出しの確認（デバッグ） | F3（10枚） |
+| メダル投入 | 右上の「メダル」ボタン、または C |
+| ボタン | それ以外のどこかをクリック/タップ、または Space / Enter |
 
 筐体モデル（`virtual/jari_cabinet.glb`）は `tools/cabinet/build_cabinet.py` で生成している（numpy のみ）。形や色を変えるときはそちらを直して `python3 tools/cabinet/build_cabinet.py` を実行する。詳しくは `tools/cabinet/README.md`。
 
