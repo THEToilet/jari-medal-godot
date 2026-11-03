@@ -219,23 +219,35 @@ def face_with_recess(F, vc, hx, hy, rr, depth, rim=0.01, fil=0.012, seg=3):
     P2, N2 = rrect_loop(hx, hy, rr, seg); P2 = P2 + [0, vc]; n = len(P2)
     def vn(d2, dw):  # 2D法線成分と面法線成分から3D法線
         v = F.D(d2[0], d2[1], dw); return v / np.linalg.norm(v)
-    # --- 平面部：外枠4隅と穴の外周を角度順にジッパー接続
+    # --- 平面部：穴の外周の各点を法線方向に外枠までまっすぐ伸ばし、穴と外枠をはしご状につなぐ
+    #     （放射状に伸ばした線どうしは交差しないので、三角形が穴に重ならない）
     hole = P2 + N2 * rim
-    corners = np.array([[F.hw, 0], [F.hw, F.L], [-F.hw, F.L], [-F.hw, 0]])
-    c2 = np.array([0, vc])
-    items = [(math.atan2(*(p - c2)[::-1]), 'H', k) for k, p in enumerate(hole)] + \
-            [(math.atan2(*(p - c2)[::-1]), 'O', k) for k, p in enumerate(corners)]
-    items.sort()
     V, NN, I = [], [], []
     for p in hole: V.append(F.P(p[0], p[1])); NN.append(F.Nw)
-    for p in corners: V.append(F.P(p[0], p[1])); NN.append(F.Nw)
-    vid = lambda it: it[2] if it[1] == 'H' else n + it[2]
-    L = len(items); st = next(k for k in range(L) if items[k][1] == 'H')
-    o = next(items[(st - d) % L] for d in range(1, L + 1) if items[(st - d) % L][1] == 'O'); h = items[st]
-    for d in range(1, L + 1):
-        it = items[(st + d) % L]
-        if it[1] == 'H': I += [vid(o), vid(h), vid(it)]; h = it
-        else: I += [vid(h), vid(o), vid(it)]; o = it
+    corner_of = {(0, 1): (F.hw, F.L), (1, 2): (-F.hw, F.L), (2, 3): (-F.hw, 0.0), (3, 0): (F.hw, 0.0)}
+    def ray_hit(p, d):   # 外枠（右0・上1・左2・下3）との交点と辺の番号
+        cands = []
+        if d[0] > 1e-9: cands.append(((F.hw - p[0]) / d[0], 0))
+        if d[1] > 1e-9: cands.append(((F.L - p[1]) / d[1], 1))
+        if d[0] < -1e-9: cands.append(((-F.hw - p[0]) / d[0], 2))
+        if d[1] < -1e-9: cands.append(((0.0 - p[1]) / d[1], 3))
+        t, e = min(cands)
+        return p + d * t, e
+    hits = [ray_hit(p, q) for p, q in zip(hole, N2)]
+    out_idx = []
+    for p, e in hits:
+        out_idx.append(len(V)); V.append(F.P(p[0], p[1])); NN.append(F.Nw)
+    for k in range(n):
+        j = (k + 1) % n
+        hk, hj = k, j
+        ok, oj = out_idx[k], out_idx[j]
+        ek, ej = hits[k][1], hits[j][1]
+        if ek == ej:
+            I += [hk, ok, oj, hk, oj, hj]
+        else:   # 辺が変わるところは外枠の角をはさむ
+            c = corner_of[(ek, ej)]
+            ci = len(V); V.append(F.P(c[0], c[1])); NN.append(F.Nw)
+            I += [hk, ok, ci, hk, ci, oj, hk, oj, hj]
     # --- 縁の丸み（面→壁）: 本体側
     rings_body, rings_in = [], []
     for k in range(3):
