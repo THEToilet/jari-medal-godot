@@ -132,6 +132,8 @@ var _medals_txt: String = ""
 var debug_pattern: String = ""   # テスト用：煽りパターンを固定
 ## デモ（アトラクト）：待機のまま DEMO_AFTER 秒たったら、自動で1プレイ見せる
 const DEMO_AFTER := 12.0
+## シーンを作り直したいとき（デモ中のメダル投入）。つながっていれば reload_current_scene の代わりにこれを出す
+signal restart_requested
 var demo: bool = false
 var _aborting: bool = false
 var demo_label: Control
@@ -616,6 +618,11 @@ func _enter(s: S) -> void:
 			stop_idle()
 
 
+## ビルを選んだあと〜結果まで（メダル投入を受け付けない間。デモは除く）。仮想筐体のカメラ切り替えに使う
+func is_in_play() -> bool:
+	return state >= S.ZOOM and not demo
+
+
 func _reset() -> void:
 	if demo:
 		# デモが終わったらタイトルに戻す
@@ -700,6 +707,8 @@ func _build_select_hint() -> void:
 
 ## スマホ・ブラウザ用：画面にメダル投入ボタンを出す（筐体では出さない）
 func _build_touch_ui() -> void:
+	if get_viewport() != get_tree().root:
+		return   # 仮想筐体（3D）の画面の中では出さない。筐体の投入口を使う
 	if not (OS.has_feature("web") or DisplayServer.is_touchscreen_available() or OS.has_feature("mobile")):
 		return
 	var b := Button.new()
@@ -1995,7 +2004,10 @@ func _abort_demo(with_coin: bool) -> void:
 	await RenderingServer.frame_post_draw
 	Fader.snapshot()
 	Engine.set_meta("fade_in", true)
-	get_tree().reload_current_scene()
+	if restart_requested.get_connections().is_empty():
+		get_tree().reload_current_scene()
+	else:
+		restart_requested.emit()   # 仮想筐体の中：ゲームの画面だけを作り直してもらう
 
 
 ## 失敗：監督が起爆器ごとズッコける

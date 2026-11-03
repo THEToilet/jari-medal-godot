@@ -1,0 +1,61 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://virtual/virtual_cabinet.gd" id="1_vc"]
+[ext_resource type="PackedScene" path="res://virtual/jari_cabinet.glb" id="2_cab"]
+[ext_resource type="PackedScene" path="res://scenes/main.tscn" id="3_game"]
+
+[sub_resource type="Environment" id="Env"]
+background_mode = 1
+background_color = Color(0.09, 0.08, 0.14, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.85, 0.85, 1, 1)
+ambient_light_energy = 0.55
+
+[sub_resource type="StandardMaterial3D" id="FloorMat"]
+albedo_color = Color(0.2, 0.16, 0.28, 1)
+roughness = 0.85
+
+[sub_resource type="PlaneMesh" id="FloorMesh"]
+material = SubResource("FloorMat")
+size = Vector2(8, 8)
+
+[sub_resource type="WorldBoundaryShape3D" id="FloorShape"]
+
+[node name="VirtualCabinet" type="Node3D"]
+script = ExtResource("1_vc")
+
+[node name="Cabinet" parent="." instance=ExtResource("2_cab")]
+
+[node name="GameViewport" type="SubViewport" parent="."]
+size = Vector2i(1280, 720)
+size_2d_override = Vector2i(1920, 1080)
+size_2d_override_stretch = true
+render_target_update_mode = 4
+
+[node name="Game" parent="GameViewport" instance=ExtResource("3_game")]
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, -0, -0, 0.997612, 0.0690655, 0, -0.0690655, 0.997612, 0, 0.92, 2.7)
+fov = 40.0
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.780869, -0.427144, 0.455842, 0, 0.729704, 0.683763, -0.624695, -0.53393, 0.569803, 2, 3, 2.5)
+light_energy = 0.9
+shadow_enabled = true
+
+[node name="Fill" type="OmniLight3D" parent="."]
+transform = Transform3D(0.8, 0.19821, -0.566315, -0, 0.943858, 0.33035, 0.6, -0.26428, 0.755087, -1.2, 1.6, 1.6)
+light_color = Color(1, 0.85, 0.95, 1)
+light_energy = 0.8
+omni_range = 5.0
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Env")
+
+[node name="Floor" type="StaticBody3D" parent="."]
+
+[node name="FloorMesh" type="MeshInstance3D" parent="Floor"]
+mesh = SubResource("FloorMesh")
+
+[node name="FloorShape" type="CollisionShape3D" parent="Floor"]
+shape = SubResource("FloorShape")
