@@ -13,3 +13,6 @@ desktop.ini
 
 # Web 書き出し先
 build/
+
+# Claude Code の個人設定（承認済みコマンド等が保存されるためコミットしない）
+.claude/settings.local.json
